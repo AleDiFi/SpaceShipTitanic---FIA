@@ -2,54 +2,10 @@ from pathlib import Path # Per la gestione dei percorsi dei file
 import matplotlib.pyplot as plt # Per la creazione di grafici
 import numpy as np # Per operazioni numeriche
 import pandas as pd # Per la manipolazione dei dati
-import seaborn as sns # Per la visualizzazione dei dati
+import seaborn as sns
 
 # Impostazioni di visualizzazione delle figure con Seaborn 
 sns.set_theme(style="whitegrid")
-
-# Definizione dei percorsi predefiniti per i dataset
-BASE_DIR = Path(__file__).resolve().parents[1] # Percorso base del progetto
-# Percorsi predefiniti per i file di train e test nel caso di non suddivsione in raw e processed
-DEFAULT_TRAIN_PATH = BASE_DIR / "data" / "train.csv"
-DEFAULT_TEST_PATH = BASE_DIR / "data" / "test.csv"
-
-# Funzioni per l'analisi esplorativa dei dati (EDA)
-def load_datasets(train_path: Path = DEFAULT_TRAIN_PATH, test_path: Path = DEFAULT_TEST_PATH) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Carica i dataset di train e test e li restituisce.
-
-    Se i file non sono presenti in data/train.csv e data/test.csv,
-    prova automaticamente i percorsi data/raw/train.csv e data/raw/test.csv.
-    """
-
-    # Risoluzione flessibile dei percorsi (fallback su data/raw)
-    train_path = Path(train_path)
-    test_path = Path(test_path)
-
-    # Percorsi alternativi nel caso di suddivisione in raw e processed
-    alt_train = BASE_DIR / "data" / "raw" / "train.csv"
-    alt_test = BASE_DIR / "data" / "raw" / "test.csv"
-
-    if not train_path.exists() and alt_train.exists():
-        print(f"[INFO] train.csv non trovato in {train_path}. Uso percorso alternativo: {alt_train}")
-        train_path = alt_train
-
-    if not test_path.exists() and alt_test.exists():
-        print(f"[INFO] test.csv non trovato in {test_path}. Uso percorso alternativo: {alt_test}")
-        test_path = alt_test
-
-    # Se ancora mancanti, generiamo un errore chiaro
-    if not train_path.exists():
-        raise FileNotFoundError(
-            f"File di train non trovato. Percorsi controllati: {BASE_DIR / 'data' / 'train.csv'} e {alt_train}"
-        )
-    if not test_path.exists():
-        raise FileNotFoundError(
-            f"File di test non trovato. Percorsi controllati: {BASE_DIR / 'data' / 'test.csv'} e {alt_test}"
-        )
-
-    train = pd.read_csv(train_path)
-    test = pd.read_csv(test_path)
-    return train, test
 
 # Funzioni di analisi e visualizzazione
 def print_dataset_shapes(train: pd.DataFrame, test: pd.DataFrame) -> None:
@@ -99,7 +55,7 @@ def plot_target_distribution(train: pd.DataFrame, target_col: str = "Transported
         colors=colors,
     ).set_title("Target Distribution", fontsize=18)
     plt.ylabel("") # Rimuove l'etichetta y predefinita
-    plt.show()
+    plt.show(block=False)
 
 # Visualizza la distribuzione dell'età
 def plot_age_distribution(train: pd.DataFrame, feature: str = "Age", target_col: str = "Transported") -> None:
@@ -109,24 +65,22 @@ def plot_age_distribution(train: pd.DataFrame, feature: str = "Age", target_col:
 
     # Creazione dell'istogramma
     plt.figure(figsize=(8, 6))
-    sns.histplot(data=train, x=feature, hue=target_col if target_col in train.columns else None, binwidth=1, kde=True)
+    sns.histplot(data=train, x=feature, hue=target_col if target_col in train.columns else None, binwidth=1, kde=True, palette="pastel")
     plt.title("Age Distribution by Transported Status", fontsize=16)
     plt.xlabel("Age (years)", fontsize=14)
     plt.ylabel("Count", fontsize=14)
     if target_col in train.columns:
         plt.legend(title=target_col, fontsize=12)
-    plt.show()
+    plt.show(block=False)
 
 # Visualizza le distribuzioni delle spese
 def plot_expense_distributions(
     train: pd.DataFrame,
-    features: list[str] | None = None,
     target_col: str = "Transported",
     zoom_ylim: int = 100,
 ) -> None:
-    features = features or ["RoomService", "FoodCourt", "ShoppingMall", "Spa", "VRDeck"]
-    valid_features = [feature for feature in features if feature in train.columns]
-
+    
+    valid_features = ['RoomService', 'FoodCourt', 'ShoppingMall', 'Spa', 'VRDeck']
     if not valid_features:
         print("Nessuna delle feature di spesa specificate è presente nel dataset.")
         return
@@ -144,7 +98,7 @@ def plot_expense_distributions(
         axes[idx, 1].set_title(f"{feature} distribution (zoom)")
 
     fig.tight_layout()
-    plt.show()
+    plt.show(block=False)
 
 # Visualizza le feature categoriche
 def plot_categorical_features(train: pd.DataFrame, features: list[str] | None = None, target_col: str = "Transported") -> None:
@@ -167,7 +121,7 @@ def plot_categorical_features(train: pd.DataFrame, features: list[str] | None = 
         ax.set_ylabel("Count")
 
     fig.tight_layout()
-    plt.show()
+    plt.show(block=False)
 
 # Preview delle feature qualitative
 # Visualizza le prime n righe delle feature qualitative specificate
@@ -184,10 +138,13 @@ def preview_qualitative_features(train: pd.DataFrame, features: list[str] | None
 
 # Funzione principale per eseguire l'EDA completa
 # Esegue in sequenza tutte le fasi dell'EDA e organizza le visualizzazioni.
-def run_full_analysis(train_path: Path = DEFAULT_TRAIN_PATH, test_path: Path = DEFAULT_TEST_PATH) -> None:
-    """Esegue in sequenza tutte le fasi dell'EDA e organizza le visualizzazioni."""
-    train, test = load_datasets(train_path, test_path)
-
+def run_full_analysis(train: pd.DataFrame, test: pd.DataFrame) -> None:
+    """Esegue in sequenza tutte le fasi dell'EDA ricevendo i dataset già caricati.
+    
+    Args:
+        train: DataFrame del training set
+        test: DataFrame del test set
+    """
     print_dataset_shapes(train, test)
     preview_head(train, "Train set")
     preview_head(test, "Test set")
@@ -206,7 +163,6 @@ def run_full_analysis(train_path: Path = DEFAULT_TRAIN_PATH, test_path: Path = D
     plot_expense_distributions(train)
     plot_categorical_features(train)
     preview_qualitative_features(train)
-
-
-if __name__ == "__main__":
-    run_full_analysis()
+    
+    # Attende che l'utente chiuda tutte le finestre prima di terminare
+    plt.show() 
