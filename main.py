@@ -92,7 +92,7 @@ def main() -> None:
 		train_fe,
 		test_fe,
 		target_col="Transported",
-		show_plots=False,  # metti True se vuoi la heatmap dei missing
+		show_plots=False,  # mettere True se si vuole la heatmap dei missing
 	)
 
 	# 5) Model selection + predict
