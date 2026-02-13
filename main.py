@@ -18,7 +18,7 @@ import pandas as pd
 
 from src.data_analysis import run_full_analysis
 from src.feature_engineering import run_feature_engineering
-from src.model import ModelConfig, evaluate_models, fit_best_model, save_model_results
+from src.model import ModelConfig, build_model_zoo, fine_tune_model, fit_best_model, save_model_results
 from src.predict import build_submission, predict_test, save_submission
 from src.preprocessing import run_preprocessing
 
@@ -95,19 +95,74 @@ def main() -> None:
 		show_plots=False,  # mettere True se si vuole la heatmap dei missing
 	)
 
-	# 5) Model selection + predict
-	print("\n[FASE 5] Model selection + predizione...")
-	cfg = ModelConfig(target_col="Transported")
-	results_df, best_model_name = evaluate_models(train_processed, y, cfg=cfg)
-	print(f"[INFO] Best model da holdout: {best_model_name}")
-	print("[INFO] Top modelli (holdout):")
-	print(results_df.head(5).to_string(index=False))
+	# 5) Model selection con CV+tuning + predict
+	print("\n[FASE 5] Model selection (CV+tuning) + predizione...")
+	cfg = ModelConfig(
+		target_col="Transported",
+		cv_selection_metric="f1",
+		tune_refit_metric="f1",
+	)
 
 	base_dir = Path(__file__).resolve().parent
 	outputs_dir = base_dir / "outputs"
+	outputs_dir.mkdir(parents=True, exist_ok=True)
+
+	available_models = list(build_model_zoo(cfg).keys())
+	if not available_models:
+		raise ValueError("[Model] Nessun modello disponibile per tuning e selezione.")
+
+	tuning_summary: list[dict[str, object]] = []
+	best_model_name = ""
+	best_params: dict[str, object] | None = None
+	best_score = float("-inf")
+
+	for model_name in available_models:
+		print(f"\n[INFO] Tuning modello: {model_name}")
+		_, model_best_params, tuning_df = fine_tune_model(
+			train_processed,
+			y,
+			model_name=model_name,
+			cfg=cfg,
+		)
+
+		top_row = tuning_df.iloc[0]
+		model_score = float(top_row[f"mean_test_{cfg.tune_refit_metric}"])
+		tuning_summary.append(
+			{
+				"model": model_name,
+				"accuracy_cv": float(top_row["mean_test_accuracy"]),
+				"precision_cv": float(top_row["mean_test_precision"]),
+				"recall_cv": float(top_row["mean_test_recall"]),
+				"f1_cv": float(top_row["mean_test_f1"]),
+				"best_params": str(model_best_params),
+			}
+		)
+
+		save_model_results(tuning_df, outputs_dir / f"tuning_{model_name}.csv")
+
+		if model_score > best_score:
+			best_score = model_score
+			best_model_name = model_name
+			best_params = model_best_params
+
+	results_df = (
+		pd.DataFrame(tuning_summary)
+		.sort_values(f"{cfg.tune_refit_metric}_cv", ascending=False)
+		.reset_index(drop=True)
+	)
+	print(f"[INFO] Best model da CV+tuning ({cfg.tune_refit_metric}): {best_model_name}")
+	print("[INFO] Top modelli (CV+tuning):")
+	print(results_df.head(5).to_string(index=False))
+
 	save_model_results(results_df, outputs_dir / "model_results.csv")
 
-	final_model = fit_best_model(train_processed, y, best_model_name=best_model_name, cfg=cfg)
+	final_model = fit_best_model(
+		train_processed,
+		y,
+		best_model_name=best_model_name,
+		cfg=cfg,
+		best_params=best_params,
+	)
 	test_preds = predict_test(final_model, test_processed)
 	submission = build_submission(test["PassengerId"], test_preds)
 
