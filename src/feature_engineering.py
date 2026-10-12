@@ -92,8 +92,9 @@ class ExpenditureTransformer(FeatureTransformer):
 
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
         exp_feats = ['RoomService', 'FoodCourt', 'ShoppingMall', 'Spa', 'VRDeck']
-        df['Expenditure'] = df[exp_feats].sum(axis=1)
-        df['No_spending'] = (df['Expenditure'] == 0).astype(int)
+        # Missing expense values must not be interpreted as zero spending.
+        df['Expenditure'] = df[exp_feats].sum(axis=1, min_count=len(exp_feats))
+        df['No_spending'] = df[exp_feats].eq(0).all(axis=1).astype(int)
 
         # Plot della distribuzione delle spese totali (solo se esiste Transported)
         if 'Transported' in df.columns and show_plots:
