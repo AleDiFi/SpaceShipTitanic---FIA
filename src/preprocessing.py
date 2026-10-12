@@ -265,9 +265,7 @@ def impute_spending(df: pd.DataFrame, cfg: PreprocessConfig) -> pd.DataFrame:
         if "CryoSleep" in df.columns:
             for c in present:
                 df.loc[df["CryoSleep"] == True, c] = df.loc[df["CryoSleep"] == True, c].fillna(0)
-        if "No_spending" in df.columns:
-            for c in present:
-                df.loc[df["No_spending"] == 1, c] = df.loc[df["No_spending"] == 1, c].fillna(0)
+        # No_spending must not be used to infer missing individual expenses.
 
     # Grouped median fill (se possibile)
     grouping_cols = [c for c in ["Age_group", "HomePlanet", "VIP"] if c in df.columns]
