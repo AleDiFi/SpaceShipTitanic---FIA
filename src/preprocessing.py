@@ -347,8 +347,8 @@ def run_preprocessing(
 
     # Split back
     n_train = len(X)
-    train_processed = combined.iloc[:n_train, :].copy()
-    test_processed = combined.iloc[n_train:, :].copy()
+    train_processed = combined.iloc[:n_train, :].copy().reset_index(drop=True)
+    test_processed = combined.iloc[n_train:, :].copy().reset_index(drop=True)
 
     print(f"[INFO] Train processed: {train_processed.shape} | Test processed: {test_processed.shape}")
     print("[Preprocessing] Completato!\n")
