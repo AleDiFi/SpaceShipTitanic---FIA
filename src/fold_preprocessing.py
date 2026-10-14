@@ -41,7 +41,7 @@ class FoldSafePreprocessor(BaseEstimator, TransformerMixin):
         frame = X.copy().reset_index(drop=True)
         frame["Group"] = frame["PassengerId"].astype("string").str.split("_").str[0].astype(int)
         frame["Surname"] = frame["Name"].astype("string").str.split().str[-1].astype(object)
-        cabin = frame["Cabin"].astype("string").str.split("/", expand=True)
+        cabin = frame["Cabin"].astype("string").str.split("/", n=2, expand=True).reindex(columns=[0, 1, 2])
         frame["Cabin_deck"] = cabin[0].astype(object)
         frame["Cabin_number"] = pd.to_numeric(cabin[1], errors="coerce")
         frame["Cabin_side"] = cabin[2].astype(object)
