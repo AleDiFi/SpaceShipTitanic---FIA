@@ -1,12 +1,8 @@
-"""Entry point della pipeline SpaceShip Titanic.
+"""Spaceship Titanic: raw-data split, fold-safe preprocessing and final holdout.
 
-Pipeline (ordine invariato):
-1) Load raw
-2) EDA (su raw)
-3) Feature Engineering
-4) Preprocessing (post-FE) -> imputazioni, cleaning finale
-5) Model selection + fit finale + predict
-6) Salvataggio in data/processed e outputs/
+The development partition is used for CV tuning; the independent holdout
+is evaluated only after selecting the best model. Final training uses all
+labeled Kaggle data before predicting the unlabeled test set.
 """
 
 from __future__ import annotations
@@ -71,7 +67,7 @@ def load_datasets(
 def main() -> None:
     """Esegue l'intera pipeline: EDA -> FE -> Preprocessing -> Model -> Submission."""
     print("=" * 60)
-    print("SPACESHIP TITANIC - Pipeline (EDA -> FE -> Preprocessing)")
+    print("SPACESHIP TITANIC - Fold-safe CV and holdout pipeline")
     print("=" * 60)
 
     # 1) Load raw
