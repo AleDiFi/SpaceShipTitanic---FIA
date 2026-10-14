@@ -54,6 +54,7 @@ class FoldSafeTests(unittest.TestCase):
         train["RoomService"] = [10., 20., 30., 40.]
         validation = passengers(2)
         validation["RoomService"] = [np.nan, 999999.]
+        validation["HomePlanet"] = "Mars"  # no matching training subgroup
         prep = FoldSafePreprocessor().fit(train)
         out = prep.transform(validation)
         self.assertEqual(prep.spending_medians_["RoomService"], 25.)
