@@ -27,60 +27,60 @@ from src.predict import build_submission, predict_test, save_submission
 # SECTION: Dataset Loading
 # =============================================================================
 def load_datasets(
-	train_path: Path | None = None,
-	test_path: Path | None = None,
+    train_path: Path | None = None,
+    test_path: Path | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-	"""Carica i dataset di train e test.
+    """Carica i dataset di train e test.
 
-	Se non vengono passati percorsi espliciti, prova automaticamente:
-	- data/raw/train.csv
-	- data/raw/test.csv
+    Se non vengono passati percorsi espliciti, prova automaticamente:
+    - data/raw/train.csv
+    - data/raw/test.csv
 
-	Args:
-		train_path: Percorso al file di training (CSV).
-		test_path: Percorso al file di test (CSV).
+    Args:
+        train_path: Percorso al file di training (CSV).
+        test_path: Percorso al file di test (CSV).
 
-	Returns:
-		(train, test) come DataFrame Pandas.
+    Returns:
+        (train, test) come DataFrame Pandas.
 
-	Raises:
-		FileNotFoundError: Se uno dei due file non esiste.
-	"""
-	base_dir = Path(__file__).resolve().parent
-	train_path = train_path or (base_dir / "data" / "raw" / "train.csv")
-	test_path = test_path or (base_dir / "data" / "raw" / "test.csv")
+    Raises:
+        FileNotFoundError: Se uno dei due file non esiste.
+    """
+    base_dir = Path(__file__).resolve().parent
+    train_path = train_path or (base_dir / "data" / "raw" / "train.csv")
+    test_path = test_path or (base_dir / "data" / "raw" / "test.csv")
 
-	train_path = Path(train_path)
-	test_path = Path(test_path)
+    train_path = Path(train_path)
+    test_path = Path(test_path)
 
-	if not train_path.exists():
-		raise FileNotFoundError(f"File di train non trovato: {train_path}")
-	if not test_path.exists():
-		raise FileNotFoundError(f"File di test non trovato: {test_path}")
+    if not train_path.exists():
+        raise FileNotFoundError(f"File di train non trovato: {train_path}")
+    if not test_path.exists():
+        raise FileNotFoundError(f"File di test non trovato: {test_path}")
 
-	train = pd.read_csv(train_path)
-	test = pd.read_csv(test_path)
+    train = pd.read_csv(train_path)
+    test = pd.read_csv(test_path)
 
-	print(f"[INFO] Dataset caricati: train {train.shape}, test {test.shape}")
-	return train, test
+    print(f"[INFO] Dataset caricati: train {train.shape}, test {test.shape}")
+    return train, test
 
 
 # =============================================================================
 # SECTION: Main Pipeline
 # =============================================================================
 def main() -> None:
-	"""Esegue l'intera pipeline: EDA -> FE -> Preprocessing -> Model -> Submission."""
-	print("=" * 60)
-	print("SPACESHIP TITANIC - Pipeline (EDA -> FE -> Preprocessing)")
-	print("=" * 60)
+    """Esegue l'intera pipeline: EDA -> FE -> Preprocessing -> Model -> Submission."""
+    print("=" * 60)
+    print("SPACESHIP TITANIC - Pipeline (EDA -> FE -> Preprocessing)")
+    print("=" * 60)
 
-	# 1) Load raw
-	print("\n[FASE 1] Caricamento dataset (raw)...")
-	train, test = load_datasets()
+    # 1) Load raw
+    print("\n[FASE 1] Caricamento dataset (raw)...")
+    train, test = load_datasets()
 
-	# 2) EDA
-	print("\n[FASE 2] Exploratory Data Analysis (raw)...")
-	run_full_analysis(train, test)
+    # 2) EDA
+    print("\n[FASE 2] Exploratory Data Analysis (raw)...")
+    run_full_analysis(train, test)
 
     # VAL-01: split RAW training rows before fitting any data-dependent step.
     # The Kaggle test set is never used to fit a validation-fold preprocessor.
@@ -95,58 +95,58 @@ def main() -> None:
         tune_refit_metric="accuracy",
     )
     print("[FASE 3] Fit/tuning sui soli dati di sviluppo (CV interna).")
-	base_dir = Path(__file__).resolve().parent
-	outputs_dir = base_dir / "outputs"
-	outputs_dir.mkdir(parents=True, exist_ok=True)
+    base_dir = Path(__file__).resolve().parent
+    outputs_dir = base_dir / "outputs"
+    outputs_dir.mkdir(parents=True, exist_ok=True)
 
-	available_models = list(build_model_zoo(cfg).keys())
-	if not available_models:
-		raise ValueError("[Model] Nessun modello disponibile per tuning e selezione.")
+    available_models = list(build_model_zoo(cfg).keys())
+    if not available_models:
+        raise ValueError("[Model] Nessun modello disponibile per tuning e selezione.")
 
-	tuning_summary: list[dict[str, object]] = []
-	best_model_name = ""
-	best_params: dict[str, object] | None = None
-	best_score = float("-inf")
+    tuning_summary: list[dict[str, object]] = []
+    best_model_name = ""
+    best_params: dict[str, object] | None = None
+    best_score = float("-inf")
 
-	for model_name in available_models:
-		print(f"\n[INFO] Tuning modello: {model_name}")
-		_, model_best_params, tuning_df = fine_tune_model(
-			X_dev,
-			y_dev,
-			model_name=model_name,
-			cfg=cfg,
-		)
+    for model_name in available_models:
+        print(f"\n[INFO] Tuning modello: {model_name}")
+        _, model_best_params, tuning_df = fine_tune_model(
+            X_dev,
+            y_dev,
+            model_name=model_name,
+            cfg=cfg,
+        )
 
-		top_row = tuning_df.iloc[0]
-		model_score = float(top_row[f"mean_test_{cfg.tune_refit_metric}"])
-		tuning_summary.append(
-			{
-				"model": model_name,
-				"accuracy_cv": float(top_row["mean_test_accuracy"]),
-				"precision_cv": float(top_row["mean_test_precision"]),
-				"recall_cv": float(top_row["mean_test_recall"]),
-				"f1_cv": float(top_row["mean_test_f1"]),
-				"best_params": str(model_best_params),
-			}
-		)
+        top_row = tuning_df.iloc[0]
+        model_score = float(top_row[f"mean_test_{cfg.tune_refit_metric}"])
+        tuning_summary.append(
+            {
+                "model": model_name,
+                "accuracy_cv": float(top_row["mean_test_accuracy"]),
+                "precision_cv": float(top_row["mean_test_precision"]),
+                "recall_cv": float(top_row["mean_test_recall"]),
+                "f1_cv": float(top_row["mean_test_f1"]),
+                "best_params": str(model_best_params),
+            }
+        )
 
-		save_model_results(tuning_df, outputs_dir / f"tuning_{model_name}.csv")
+        save_model_results(tuning_df, outputs_dir / f"tuning_{model_name}.csv")
 
-		if model_score > best_score:
-			best_score = model_score
-			best_model_name = model_name
-			best_params = model_best_params
+        if model_score > best_score:
+            best_score = model_score
+            best_model_name = model_name
+            best_params = model_best_params
 
-	results_df = (
-		pd.DataFrame(tuning_summary)
-		.sort_values(f"{cfg.tune_refit_metric}_cv", ascending=False)
-		.reset_index(drop=True)
-	)
-	print(f"[INFO] Best model da CV+tuning ({cfg.tune_refit_metric}): {best_model_name}")
-	print("[INFO] Top modelli (CV+tuning):")
-	print(results_df.head(5).to_string(index=False))
+    results_df = (
+        pd.DataFrame(tuning_summary)
+        .sort_values(f"{cfg.tune_refit_metric}_cv", ascending=False)
+        .reset_index(drop=True)
+    )
+    print(f"[INFO] Best model da CV+tuning ({cfg.tune_refit_metric}): {best_model_name}")
+    print("[INFO] Top modelli (CV+tuning):")
+    print(results_df.head(5).to_string(index=False))
 
-	save_model_results(results_df, outputs_dir / "model_results.csv")
+    save_model_results(results_df, outputs_dir / "model_results.csv")
 
     # Holdout untouched by hyperparameter search and model selection.
     print("[FASE 4] Valutazione indipendente del modello selezionato.")
@@ -180,19 +180,19 @@ def main() -> None:
     feature_step.transform(test).to_csv(processed_dir / "test_processed.csv", index=False)
     y.to_csv(processed_dir / "y_train.csv", index=False)
 
-	print("\n" + "=" * 60)
-	print("Pipeline completata con successo!")
-	print(f"Salvati: {processed_dir / 'train_processed.csv'}")
-	print(f"Salvati: {processed_dir / 'test_processed.csv'}")
-	print(f"Salvati: {processed_dir / 'y_train.csv'}")
-	print(f"Salvati: {outputs_dir / 'model_results.csv'}")
-	print(f"Salvati: {outputs_dir / 'holdout_results.csv'}")
-	print(f"Salvati: {outputs_dir / 'submission.csv'}")
-	print("=" * 60)
+    print("\n" + "=" * 60)
+    print("Pipeline completata con successo!")
+    print(f"Salvati: {processed_dir / 'train_processed.csv'}")
+    print(f"Salvati: {processed_dir / 'test_processed.csv'}")
+    print(f"Salvati: {processed_dir / 'y_train.csv'}")
+    print(f"Salvati: {outputs_dir / 'model_results.csv'}")
+    print(f"Salvati: {outputs_dir / 'holdout_results.csv'}")
+    print(f"Salvati: {outputs_dir / 'submission.csv'}")
+    print("=" * 60)
 
-	print("\nChiudi tutte le finestre dei grafici per terminare il programma.")
-	plt.show()
+    print("\nChiudi tutte le finestre dei grafici per terminare il programma.")
+    plt.show()
 
 
 if __name__ == "__main__":
-	main()
+    main()
