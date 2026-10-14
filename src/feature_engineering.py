@@ -233,7 +233,7 @@ class FamilySizeTransformer(FeatureTransformer):
 
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
         # Missing names must remain missing, rather than becoming a fictitious family.
-        df['Surname'] = df['Name'].str.split().str[-1]
+        df['Surname'] = df['Name'].astype('string').str.split().str[-1]
         df['Family_size'] = df['Surname'].map(df['Surname'].value_counts())
         # Family_size is a surname-frequency proxy, not a verified family count.
         df = df.drop(columns=['Name'])
@@ -287,8 +287,8 @@ class FeatureEngineeringPipeline:
                 features_train = train.drop(columns=[target_col]) if target_col else train
                 combined = pd.concat([features_train, test], ignore_index=True)
                 combined = transformer.transform(combined)
-                train = combined.iloc[:n_train].copy()
-                test = combined.iloc[n_train:].copy()
+                train = combined.iloc[:n_train].copy().reset_index(drop=True)
+                test = combined.iloc[n_train:].copy().reset_index(drop=True)
                 if target_col:
                     train[target_col] = target.to_numpy()
             else:
