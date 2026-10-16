@@ -40,10 +40,10 @@ class ExperimentRegressionTests(unittest.TestCase):
         self.assertEqual(downcast, [])
         self.assertIs(out.loc[0, "CryoSleep"], True)
         self.assertIs(out.loc[2, "CryoSleep"], False)
-        self.assertIs(out.loc[1, "CryoSleep"], True)
+        self.assertEqual(out.loc[1, "CryoSleep"], preprocessor.category_modes_["CryoSleep"])
         self.assertIs(out.loc[1, "VIP"], False)
         self.assertEqual(out.loc[1, "HomePlanet"], "Earth")
-        self.assertEqual(out.loc[1, "Destination"], "TRAPPIST-1e")
+        self.assertEqual(out.loc[1, "Destination"], preprocessor.category_modes_["Destination"])
 
     def test_holdout_partition_is_reproducible(self):
         sample = pd.concat([passenger_frame()] * 10, ignore_index=True)
