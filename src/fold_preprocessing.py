@@ -106,7 +106,12 @@ class FoldSafePreprocessor(BaseEstimator, TransformerMixin):
         frame["HomePlanet"] = planet.fillna(self.category_modes_["HomePlanet"]).astype(object)
 
         for col in ("Destination", "CryoSleep", "VIP", "Cabin_deck", "Cabin_side"):
-            frame[col] = frame[col].fillna(self.category_modes_[col]).astype(object)
+            # Resolve missing categories explicitly: pandas fillna on an object
+            # series can silently downcast booleans and emit FutureWarning.
+            fallback = self.category_modes_[col]
+            frame[col] = frame[col].map(
+                lambda value: value if pd.notna(value) else fallback
+            ).astype(object)
         frame["Age"] = frame["Age"].fillna(self.age_median_)
         frame["Age_group"] = _age_groups(frame["Age"])
         return frame
