@@ -45,6 +45,15 @@ class ExperimentRegressionTests(unittest.TestCase):
         self.assertEqual(out.loc[1, "HomePlanet"], "Earth")
         self.assertEqual(out.loc[1, "Destination"], preprocessor.category_modes_["Destination"])
 
+    def test_fractional_cabin_median_fills_nullable_integer_column(self):
+        raw = passenger_frame()
+        raw["Cabin"] = ["G/432/S", "G/433/P", None, None]
+        processor = FoldSafePreprocessor().fit(raw)
+        self.assertEqual(processor.cabin_median_, 432.5)
+        transformed = processor.transform(raw)
+        self.assertEqual(transformed["Cabin_number"].tolist(), [432.0, 433.0, 432.5, 432.5])
+        self.assertTrue(pd.api.types.is_float_dtype(transformed["Cabin_number"]))
+
     def test_holdout_partition_is_reproducible(self):
         sample = pd.concat([passenger_frame()] * 10, ignore_index=True)
         sample["Transported"] = [0, 1] * 20
