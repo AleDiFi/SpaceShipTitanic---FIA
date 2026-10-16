@@ -43,7 +43,7 @@ class FoldSafePreprocessor(BaseEstimator, TransformerMixin):
         frame["Surname"] = frame["Name"].astype("string").str.split().str[-1].astype(object)
         cabin = frame["Cabin"].astype("string").str.split("/", n=2, expand=True).reindex(columns=[0, 1, 2])
         frame["Cabin_deck"] = cabin[0].astype(object)
-        frame["Cabin_number"] = pd.to_numeric(cabin[1], errors="coerce")
+        frame["Cabin_number"] = pd.to_numeric(cabin[1], errors="coerce").astype("float64")
         frame["Cabin_side"] = cabin[2].astype(object)
         for n in range(1, 8):
             lower = (n - 1) * 300
