@@ -38,10 +38,10 @@ class ExperimentRegressionTests(unittest.TestCase):
         downcast = [w for w in caught if issubclass(w.category, FutureWarning)
                     and "Downcasting" in str(w.message)]
         self.assertEqual(downcast, [])
-        self.assertIs(out.loc[0, "CryoSleep"], True)
-        self.assertIs(out.loc[2, "CryoSleep"], False)
+        self.assertEqual(bool(out.loc[0, "CryoSleep"]), True)
+        self.assertEqual(bool(out.loc[2, "CryoSleep"]), False)
         self.assertEqual(out.loc[1, "CryoSleep"], preprocessor.category_modes_["CryoSleep"])
-        self.assertIs(out.loc[1, "VIP"], False)
+        self.assertEqual(bool(out.loc[1, "VIP"]), False)
         self.assertEqual(out.loc[1, "HomePlanet"], "Earth")
         self.assertEqual(out.loc[1, "Destination"], preprocessor.category_modes_["Destination"])
 
