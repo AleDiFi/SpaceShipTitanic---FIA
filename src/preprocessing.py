@@ -188,21 +188,15 @@ def impute_surname(df: pd.DataFrame, cfg: PreprocessConfig) -> pd.DataFrame:
     if before == 0:
         return df
 
-    # Usa il cognome più frequente nel gruppo (solo per gruppi con size>1 se presente)
-    if "Group_size" in df.columns:
-        base = df[df["Group_size"] > 1]
-    else:
-        base = df
-
-    if base.empty:
-        return df
-
-    gsn = base.groupby(["Group", "Surname"]).size().unstack().fillna(0)
-    missing_idx = df.index[df["Surname"].isna() & df["Group"].isin(gsn.index)]
-    if len(missing_idx) > 0:
-        df.loc[missing_idx, "Surname"] = df.loc[missing_idx, "Group"].map(
-            lambda g: gsn.idxmax(axis=1).get(g, np.nan)
-        )
+    # Do not assume everyone in a travel group has the same surname.
+    # Infer a missing surname only when all known surnames in that group agree.
+    known = df.dropna(subset=["Group", "Surname"])
+    unique_counts = known.groupby("Group")["Surname"].nunique()
+    unambiguous = unique_counts[unique_counts == 1].index
+    candidates = known[known["Group"].isin(unambiguous)]
+    group_to_surname = candidates.groupby("Group")["Surname"].first()
+    missing = df["Surname"].isna()
+    df.loc[missing, "Surname"] = df.loc[missing, "Group"].map(group_to_surname)
 
     after = df["Surname"].isna().sum()
     print(f"[Preprocessing] Surname missing: {before} -> {after}")
@@ -265,9 +259,7 @@ def impute_spending(df: pd.DataFrame, cfg: PreprocessConfig) -> pd.DataFrame:
         if "CryoSleep" in df.columns:
             for c in present:
                 df.loc[df["CryoSleep"] == True, c] = df.loc[df["CryoSleep"] == True, c].fillna(0)
-        if "No_spending" in df.columns:
-            for c in present:
-                df.loc[df["No_spending"] == 1, c] = df.loc[df["No_spending"] == 1, c].fillna(0)
+        # No_spending must not be used to infer missing individual expenses.
 
     # Grouped median fill (se possibile)
     grouping_cols = [c for c in ["Age_group", "HomePlanet", "VIP"] if c in df.columns]
@@ -339,6 +331,11 @@ def run_preprocessing(
 
     # Imputazioni guidate (ora che abbiamo feature FE disponibili)
     combined = impute_surname(combined, cfg)
+    # A recovered surname changes the observed surname-frequency proxy.
+    if "Family_size" in combined.columns:
+        combined["Family_size"] = combined["Surname"].map(
+            combined["Surname"].value_counts()
+        )
     combined = impute_homeplanet(combined, cfg)
     combined = impute_destination(combined, cfg)
     combined = impute_boolean_cols(combined, cols=["CryoSleep", "VIP"])
@@ -350,8 +347,8 @@ def run_preprocessing(
 
     # Split back
     n_train = len(X)
-    train_processed = combined.iloc[:n_train, :].copy()
-    test_processed = combined.iloc[n_train:, :].copy()
+    train_processed = combined.iloc[:n_train, :].copy().reset_index(drop=True)
+    test_processed = combined.iloc[n_train:, :].copy().reset_index(drop=True)
 
     print(f"[INFO] Train processed: {train_processed.shape} | Test processed: {test_processed.shape}")
     print("[Preprocessing] Completato!\n")

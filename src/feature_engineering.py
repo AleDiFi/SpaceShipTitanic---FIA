@@ -92,8 +92,9 @@ class ExpenditureTransformer(FeatureTransformer):
 
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
         exp_feats = ['RoomService', 'FoodCourt', 'ShoppingMall', 'Spa', 'VRDeck']
-        df['Expenditure'] = df[exp_feats].sum(axis=1)
-        df['No_spending'] = (df['Expenditure'] == 0).astype(int)
+        # Missing expense values must not be interpreted as zero spending.
+        df['Expenditure'] = df[exp_feats].sum(axis=1, min_count=len(exp_feats))
+        df['No_spending'] = df[exp_feats].eq(0).all(axis=1).astype(int)
 
         # Plot della distribuzione delle spese totali (solo se esiste Transported)
         if 'Transported' in df.columns and show_plots:
@@ -122,10 +123,10 @@ class GroupTransformer(FeatureTransformer):
         return "Group Division"
 
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
-        df['Group'] = df['PassengerId'].apply(lambda x: x.split('_')[0]).astype(int)
+        df['Group'] = df['PassengerId'].str.split('_').str[0].astype(int)
 
         # Calcoliamo la dimensione del gruppo
-        df['Group_size'] = df['Group'].map(lambda x: df['Group'].value_counts()[x])
+        df['Group_size'] = df['Group'].map(df['Group'].value_counts())
 
         # Dato che si può notare un alta correlazione tra gruppi da 1 trasportati
         # più di gruppi grandi, creiamo una nuova feature binaria che traccia questo.
@@ -231,21 +232,11 @@ class FamilySizeTransformer(FeatureTransformer):
         return "Family Size"
 
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
-        # Rimpiazziamo per ora i valori NaN con dei valori fittizi per poter eseguire lo split
-        df['Name'].fillna('Unknown Unknown', inplace=True)
-
-        # Estraiamo il cognome
-        df['Surname'] = df['Name'].str.split().str[-1]  # Prendiamo l'ultimo elemento come cognome
-
-        # Calcoliamo la dimensione della famiglia
-        df['Family_size'] = df['Surname'].map(lambda x: df['Surname'].value_counts()[x])
-
-        # Reinseriamo i NaN originari
-        df.loc[df['Surname'] == 'Unknown', 'Surname'] = np.nan
-        df.loc[df['Family_size'] > 100, 'Family_size'] = np.nan  # Consideriamo valori anomali come NaN
-
-        # Drop della colonna Name
-        df.drop(columns=['Name'], inplace=True)
+        # Missing names must remain missing, rather than becoming a fictitious family.
+        df['Surname'] = df['Name'].astype('string').str.split().str[-1]
+        df['Family_size'] = df['Surname'].map(df['Surname'].value_counts())
+        # Family_size is a surname-frequency proxy, not a verified family count.
+        df = df.drop(columns=['Name'])
 
         # Plot della distribuzione della dimensione della famiglia (solo se esiste Transported)
         if 'Transported' in df.columns and show_plots:
@@ -285,11 +276,24 @@ class FeatureEngineeringPipeline:
         """
         print("\n[Feature Engineering] Applicazione trasformazioni...")
 
-        # Applichiamo ogni trasformatore in sequenza
+        # Group and surname frequencies need the same passenger universe for
+        # training and Kaggle test. All other strategies retain their old behavior.
+        n_train = len(train)
         for transformer in self.transformers:
             print(f"  -> Applicando: {transformer.get_name()}")
-            train = transformer.transform(train)
-            test = transformer.transform(test)
+            if isinstance(transformer, (GroupTransformer, FamilySizeTransformer)):
+                target_col = 'Transported' if 'Transported' in train.columns else None
+                target = train[target_col].copy() if target_col else None
+                features_train = train.drop(columns=[target_col]) if target_col else train
+                combined = pd.concat([features_train, test], ignore_index=True)
+                combined = transformer.transform(combined)
+                train = combined.iloc[:n_train].copy().reset_index(drop=True)
+                test = combined.iloc[n_train:].copy().reset_index(drop=True)
+                if target_col:
+                    train[target_col] = target.to_numpy()
+            else:
+                train = transformer.transform(train)
+                test = transformer.transform(test)
 
         print("\n[Feature Engineering] Completato!")
         return train, test

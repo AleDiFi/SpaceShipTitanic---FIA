@@ -15,7 +15,8 @@ from pathlib import Path
 from typing import Iterable
 
 import pandas as pd
-from sklearn.compose import ColumnTransformer
+import numpy as np
+from sklearn.compose import ColumnTransformer, make_column_selector
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, f1_score, make_scorer, precision_score, recall_score
@@ -25,6 +26,7 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.svm import SVC
+from src.fold_preprocessing import FoldSafePreprocessor
 
 
 @dataclass(frozen=True)
@@ -39,7 +41,7 @@ class ModelConfig:
     cv_selection_metric: str = "accuracy"
     tune_n_iter: int = 40
     tune_cv_folds: int = 5
-    tune_refit_metric: str = "f1"
+    tune_refit_metric: str = "accuracy"
     # Modelli da confrontare (sklearn-only; xgboost opzionale se disponibile)
     model_names: tuple[str, ...] = field(
         default_factory=lambda: (
@@ -186,21 +188,22 @@ def _build_pipeline_for_model(
     estimator: object,
 ) -> Pipeline:
     """Crea la pipeline (preprocessor + estimator) adatta al modello."""
-    categorical_cols, numeric_cols = _split_feature_types(X)
+    # Column selectors are resolved AFTER fold-safe feature engineering.
     scale_numeric = _model_requires_scaling(model_name)
     dense_matrix = _model_requires_dense_matrix(model_name)
-
-    # Per GaussianNB forziamo dense; per gli altri preferiamo sparse.
-    preprocessor = build_preprocessor(
-        categorical_cols,
-        numeric_cols,
-        scale_numeric=scale_numeric,
-        sparse_output=not dense_matrix,
+    cat = OneHotEncoder(handle_unknown="ignore", sparse_output=not dense_matrix)
+    num = StandardScaler() if scale_numeric else "passthrough"
+    encoded = ColumnTransformer(
+        [
+            ("cat", cat, make_column_selector(dtype_include=["object", "category", "bool", "string"])),
+            ("num", num, make_column_selector(dtype_include=np.number)),
+        ],
+        remainder="drop",
     )
-
     pipeline = Pipeline(
         steps=[
-            ("preprocessor", preprocessor),
+            ("feature_preprocessing", FoldSafePreprocessor()),
+            ("preprocessor", encoded),
             ("classifier", estimator),
         ]
     )

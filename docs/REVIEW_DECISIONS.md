@@ -1,0 +1,57 @@
+# FIA — Technical decision log
+
+## FE-01 — Spending
+Problem: partial missing expenses could be misclassified as zero total spending.
+Decision: total expenditure remains missing until every component is known; No_spending is true only when all observed components equal zero; do not fill missing expenses using that flag.
+Keep CryoSleep zero-spending imputation as an explicit domain assumption.
+Status: 4/4 FE-01 regression tests passed in the user's local run on 14 October 2026.
+
+## FE-02 — Group and surname counts
+Problem: group sizes and surname frequencies were computed separately in train and test; unknown-name placeholders distorted counts; post-imputation family counts were stale.
+Decision: compute count-based features over the combined unlabeled train/test passenger table, preserve row order and target separation; preserve missing surnames; infer missing surnames only for travel groups with exactly one distinct known surname; recompute Family_size after imputation.
+Terminology: Family_size is an observed surname-frequency proxy, not the number of verified relatives.
+Status: 4/4 FE-02 regression tests passed after correcting the index and missing-name issues. User's local test output on 14 October 2026: 9 tests total, 0 errors/failures (including FE-01 and the existing sample test).
+Tradeoff: use of the unlabeled Kaggle test set is transductive; during VAL-01 cross-validation must avoid using validation folds improperly.
+
+## VAL-01 — Validation architecture
+Implemented on branch review/val-01-validation (awaiting test execution): a new FoldSafePreprocessor fits group counts, surname frequencies, categorical fallback values, and numerical medians exclusively on the training subset passed to fit(). It computes age bins after imputing age and applies trained statistics unchanged to validation/test rows. The model pipeline begins with this transformer, followed by OHE/scaling and the classifier, so RandomizedSearchCV refits the whole preprocessing within each training fold.
+In main.py, the raw labeled train is divided into stratified development (80%) and final holdout (20%) before any learned preprocessing. Candidate models are tuned on development CV and selected by accuracy (Kaggle evaluation metric); the chosen model is evaluated on the untouched holdout, logged separately as outputs/holdout_results.csv, then refitted on all labeled training data for the Kaggle submission. F1/precision/recall remain supplementary metrics.
+Scope/limitations: the new validation path does not reuse the legacy transductive train+Kaggle-test frequency counts; unseen groups are treated conservatively as solitary. Group peers may still occur in different random folds, so group-aware split evaluation remains a possible follow-up sensitivity analysis. CV-best accuracy is a selection statistic, not an unbiased evaluation; holdout is the independent estimate. Legacy run_preprocessing remains for compatibility with FE-01/FE-02 unit tests, not used by the new main training path. This refactor can change model accuracy in either direction; no improvement is claimed.
+Status: user executed python -m unittest discover -s tests -v on 16 October 2026; all 13 tests passed in 0.716 s, with zero failures/errors (4 FE-01, 4 FE-02, 4 VAL-01, 1 sample test). This establishes regression-test success only; full Kaggle dataset run, independent holdout metrics and submission are not yet verified.
+
+Release policy: main stays unchanged until approval. Never claim successful tests or Accuracy improvements without execution and evidence.
+## EXP-01 — First complete Kaggle-dataset run (16 October 2026)
+User supplied terminal output and generated CSV files. Complete pipeline exited successfully and created 4,277 prediction rows with no duplicate PassengerIds or nulls; Transported is boolean (2,210 True, 2,067 False). Model selection by development CV accuracy chose XGBoost (0.809175), with SVC very close (0.808024). Independent holdout accuracy for selected XGBoost: 0.809086; precision: 0.805618; recall: 0.818493; F1: 0.812005. These are NOT Kaggle leaderboard scores. The old pre-review result is not a controlled apples-to-apples comparison because evaluation design and preprocessing differ. The log contains 240 FutureWarning repetitions from src/fold_preprocessing.py line 109 (Pandas silent downcasting during fillna); a compatibility cleanup should be reviewed and tested before final release. Next actions: resolve warnings, inspect fairness of SVC comparison, run further stability checks; do not select or tune models against the held-out evaluation results.
+
+## EXP-02 — Pandas warning fix and model robustness (16 October 2026)
+- **Issue:** repeated Pandas FutureWarning for implicit downcasting during missing categorical value replacement in FoldSafePreprocessor._fill_basic.
+- **Implementation:** explicit element-wise replacement of missing values, retaining object storage and the original boolean values for CryoSleep/VIP. Do not silence or globally filter warnings. Regression tests cover booleans, imputed categories, and absence of the observed warning.
+- **Existing observation:** EXP-01 development CV accuracy XGBoost 0.809175 versus SVC 0.808024: difference = 0.001151 (about 0.115 percentage points), too small to establish a robust superiority from those means alone.
+- **Robustness experiment:** src/robustness_experiment.py reproduces the raw 80/20 split with random_state=42 and uses ONLY its development portion, preserving the holdout untouched. Both models use fixed hyperparameters from the earlier EXP-01 tuning. It evaluates the exact same folds for both models under repeated StratifiedKFold and repeated StratifiedGroupKFold (three deterministic random seeds; five folds), with each pipeline fitting feature and missing-data statistics on its own training fold. Exports per-fold metrics and descriptive summaries to outputs/exp02_fold_results.csv and outputs/exp02_summary.csv.
+- **Interpretation caution:** repeated folds are correlated, so fold standard deviation is descriptive and is not a statistical significance test. Group-aware validation asks a harder/different question (unseen travel groups) and should not be equated with Kaggle leaderboard performance. Because the original holdout group membership overlaps can still occur in ordinary stratified splitting, its score estimates generalization to randomly held-out passengers, not necessarily wholly unseen groups.
+- **Status:** implementation and regression tests committed; local test execution and full robustness experiment pending. No new performance figures claimed. main remains unchanged.
+
+### EXP-02 regression: fractional cabin-number median
+- During the first local robustness run, the user encountered `TypeError: Invalid value '432.5' for dtype 'Int64'` in `FoldSafePreprocessor.transform` when an even number of observed cabin numbers yielded a fractional median. This appears in alternative CV folds despite the earlier 13-test run and complete pipeline succeeding.
+- Fix: convert parsed `Cabin_number` to `float64` immediately in `_extract()` so fractional learned medians are representable. Cabin region flags are still formed from the observed cabin number before imputation, preserving existing treatment of unknown regions. Added test with observed cabin numbers 432 and 433, expecting imputed 432.5 in two missing rows.
+- Status: fix and regression test committed to review/exp-02-robustness; retest and robustness execution pending. No metrics from this incomplete run.
+
+### EXP-02 measured robustness results (16 October 2026)
+- User supplied `exp02_fold_results.csv` (60 rows, 9 columns) and `exp02_summary.csv` (4 rows, 8 columns). All 60 records are complete, with no duplicate (scheme, seed, fold, model) keys. Three seeds (42, 123, 2026), five folds per seed, two models, two schemes.
+- Stratified CV across 15 folds: XGBoost mean Accuracy **0.807163** (fold SD **0.009285**), mean F1 **0.809853**; SVC mean Accuracy **0.805868** (SD **0.010966**), mean F1 **0.808130**. Paired Accuracy gap XGBoost minus SVC **+0.001295** (7 wins, 8 losses).
+- StratifiedGroupKFold across 15 folds: XGBoost mean Accuracy **0.805981** (SD **0.009669**), mean F1 **0.809291**; SVC mean Accuracy **0.803963** (SD **0.007089**), mean F1 **0.805709**. Paired gap **+0.002017** (7 wins, 7 losses, 1 tie).
+- The group-aware scheme has **zero shared travel groups in every fold**. Ordinary stratified folds contain overlapping travel groups, as expected. Group counts from two model rows per fold must not be double-counted.
+- Interpretation: XGBoost has a small average edge under both schemes but is not consistently better fold-by-fold. No hypothesis test or uncertainty interval for independent repeated samples was calculated; correlated folds cannot support a strong statistical superiority claim. Group-aware validation represents a distinct, more demanding deployment scenario.
+- Execution status: experiment produced both complete CSV files after the cabin median type fix; the user did not separately provide the 18-test terminal output, so full updated unittest success is not independently confirmed. EXP-02 findings do not replace the untouched VAL-01 holdout estimate and are not Kaggle leaderboard scores.
+
+## Release readiness review — 16 October 2026
+- Inspected main.py, src/fold_preprocessing.py, src/robustness_experiment.py, tests/test_experiment.py, and README.md on review/exp-02-robustness. Main training and evaluation continue to use train-only fold-fitted transformations and an untouched 20% holdout.
+- Fixed test robustness: assertions for CryoSleep/VIP compare boolean values, not Python object identity (which can differ for NumPy/Pandas boolean scalars).
+- Replaced outdated placeholder README with execution requirements, experiment commands, output descriptions, measured scores, limitations, and a warning that legacy preprocessing is not used by the new main pipeline.
+- Outstanding release gate: the complete 18-test suite must be executed after these latest commits. The end-to-end EXP-01 and EXP-02 CSVs were generated on earlier branch revisions, not a new full pipeline run after the documentation and regression-test edits. No release/merge approval has been given; main remains unchanged.
+
+### Final regression gate — 17 October 2026
+- User ran `python -m unittest discover -s tests -v` using the project's virtual environment and reported **Ran 18 tests in 0.682s — OK**, no errors or failures. This validates FE-01, FE-02, VAL-01 and EXP-02 unit/regression test coverage after latest code/test changes.
+- An earlier run with global Python 3.13 failed during Matplotlib import (`KeyboardInterrupt` followed by a partially initialized Matplotlib error); the project virtual environment run passed. This was an interpreter/environment selection issue, not evidence of model regression.
+- The EXP-01 full-data pipeline and EXP-02 robustness experiment succeeded on earlier revisions. Their scores and caveats remain recorded above. The passing 18-test run is not an additional full tuning run or a new leaderboard score.
+- Final review status: release candidate with 18/18 tests passing, awaiting explicit user approval for any merge into `main`. No merge performed.
