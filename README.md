@@ -46,7 +46,7 @@ L'esplorazione iniziale può aprire finestre grafiche: chiuderle per consentire 
 python -m unittest discover -s tests -v
 ```
 
-I test coprono la gestione delle spese mancanti (FE-01), gruppi e cognomi (FE-02), indipendenza statistica dei fold (VAL-01), imputazioni categoriche e mediana frazionaria delle cabine (EXP-02). L'esito deve essere verificato nuovamente dopo ogni aggiornamento.
+I test usano **la stessa implementazione del preprocessing della pipeline principale** e coprono la gestione delle spese mancanti (FE-01), gruppi e cognomi (FE-02), indipendenza statistica dei fold (VAL-01), imputazioni categoriche e mediana frazionaria delle cabine (EXP-02). L'esito deve essere verificato nuovamente dopo ogni aggiornamento.
 
 ## Esperimento di robustezza EXP-02
 
@@ -72,14 +72,17 @@ Le motivazioni di tutte le modifiche e i risultati sperimentali sono registrati 
 ## Organizzazione
 
 - `main.py`: pipeline completa e generazione della submission.
-- `src/fold_preprocessing.py`: feature engineering e imputazione sicuri rispetto ai fold.
+- `src/preprocessing.py`: **unico modulo operativo** per feature engineering e imputazione, appresi esclusivamente dai dati di training di ogni fold.
 - `src/model.py`: classificatori, pipeline scikit-learn, tuning e training.
 - `src/predict.py`: predizioni e creazione CSV Kaggle.
 - `src/robustness_experiment.py`: esperimento di stabilità.
-- `src/feature_engineering.py`, `src/preprocessing.py`: trasformazioni precedenti mantenute per verifiche e compatibilità; **non** costituiscono il percorso di training di `main.py`.
 - `tests/`: test unitari e di regressione.
 - `docs/REVIEW_DECISIONS.md`: registro tecnico del processo di revisione.
 
-## Stato di integrazione
+## Architettura lineare
 
-Questo branch è una **versione di revisione**. L'integrazione in `main` richiede verifica dei test e approvazione esplicita.
+`main.py` → `src/model.py` → `src/preprocessing.py` (feature engineering + valori mancanti, per fold) → codifica/scaling → classificatore → `src/predict.py`. Non esistono moduli alternativi di feature engineering o preprocessing nella struttura corrente del branch di pulizia.
+
+## Stato
+
+Questo branch di semplificazione richiede la verifica dei test prima di essere integrato in `main`. Il merge non viene eseguito automaticamente.
