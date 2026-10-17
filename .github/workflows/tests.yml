@@ -26,3 +26,17 @@ jobs:
         env:
           MPLBACKEND: Agg
         run: python -m unittest discover -s tests -v
+      - name: Run feature ablation on audit branch
+        if: github.head_ref == 'review/fia-conceptual-audit'
+        env:
+          MPLBACKEND: Agg
+        run: python -m src.feature_ablation
+        timeout-minutes: 25
+      - name: Publish feature ablation CSVs
+        if: github.head_ref == 'review/fia-conceptual-audit'
+        uses: actions/upload-artifact@v4
+        with:
+          name: fia-feature-ablation
+          path: |
+            outputs/feature_ablation_folds.csv
+            outputs/feature_ablation_summary.csv

@@ -12,7 +12,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import pandas as pd
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
 
 from src.data_analysis import run_full_analysis
 from src.model import ModelConfig, build_model_zoo, fine_tune_model, fit_best_model, save_model_results
@@ -74,17 +74,20 @@ def main() -> None:
     print("\n[FASE 1] Caricamento dataset (raw)...")
     train, test = load_datasets()
 
-    # 2) EDA
-    print("\n[FASE 2] Exploratory Data Analysis (raw)...")
-    run_full_analysis(train, test)
-
-    # VAL-01: split RAW training rows before fitting any data-dependent step.
+    # VAL-01: split RAW training rows before any supervised EDA or learned preprocessing.
     # The Kaggle test set is never used to fit a validation-fold preprocessor.
     X = train.drop(columns=["Transported"])
     y = train["Transported"].astype(int)
     X_dev, X_holdout, y_dev, y_holdout = train_test_split(
         X, y, test_size=0.20, random_state=42, stratify=y,
     )
+    # EDA may visualize target relationships ONLY on development labels.
+    # Test Kaggle remains unlabeled; holdout labels are not examined by EDA.
+    print("\n[FASE 2] Exploratory Data Analysis (development data only)...")
+    eda_development = X_dev.copy()
+    eda_development["Transported"] = y_dev
+    run_full_analysis(eda_development, test)
+
     cfg = ModelConfig(
         target_col="Transported",
         cv_selection_metric="accuracy",
@@ -158,6 +161,12 @@ def main() -> None:
         "f1": f1_score(y_holdout, holdout_preds, zero_division=0),
     }])
     save_model_results(holdout_results, outputs_dir / "holdout_results.csv")
+    # Descriptive final error breakdown; do not tune the model on this holdout.
+    matrix = confusion_matrix(y_holdout, holdout_preds, labels=[0, 1])
+    matrix_df = pd.DataFrame(matrix, index=["Actual_False", "Actual_True"],
+                             columns=["Pred_False", "Pred_True"])
+    matrix_df.to_csv(outputs_dir / "holdout_confusion_matrix.csv")
+    print("[VAL-01] Holdout confusion matrix:\n", matrix_df)
     print("[VAL-01] Holdout results:\n", holdout_results.to_string(index=False))
 
     print("[FASE 5] Fit finale su tutto il train Kaggle e submission.")
@@ -183,6 +192,7 @@ def main() -> None:
     print(f"Salvati: {processed_dir / 'y_train.csv'}")
     print(f"Salvati: {outputs_dir / 'model_results.csv'}")
     print(f"Salvati: {outputs_dir / 'holdout_results.csv'}")
+    print(f"Salvati: {outputs_dir / 'holdout_confusion_matrix.csv'}")
     print(f"Salvati: {outputs_dir / 'submission.csv'}")
     print("=" * 60)
 
