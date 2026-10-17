@@ -23,8 +23,8 @@ python main.py
 
 La procedura esegue:
 
-1. Caricamento dati ed esplorazione iniziale (`src/data_analysis.py`).
-2. Suddivisione stratificata del training Kaggle: **80% sviluppo / 20% holdout indipendente**, seed 42.
+1. Caricamento dei dataset originali; successivamente si esegue l'EDA (`src/data_analysis.py`) dopo aver riservato l'holdout.
+2. Suddivisione stratificata delle righe etichettate: **80% sviluppo / 20% holdout**, seed 42. L'EDA supervisionata viene effettuata **dopo lo split**, usando solo i dati di sviluppo. L'holdout non è necessariamente indipendente per gruppi.
 3. Per ogni modello, ricerca degli iperparametri con `RandomizedSearchCV` sul solo set di sviluppo. Ogni fold addestra il proprio `FoldSafePreprocessor`, seguito da codifica delle categorie, eventuale scaling e classificatore.
 4. Selezione del modello in base alla **Accuracy** media di cross-validation; precision, recall e F1 restano metriche ausiliarie.
 5. Una sola valutazione del modello selezionato sull'holdout e successivo addestramento finale su tutti i dati etichettati.
@@ -35,7 +35,7 @@ L'esplorazione iniziale può aprire finestre grafiche: chiuderle per consentire 
 ### Output
 
 - `outputs/model_results.csv`: risultati di selezione mediante CV.
-- `outputs/holdout_results.csv`: valutazione finale indipendente sul 20% riservato.
+- `outputs/holdout_results.csv`: valutazione finale sul 20% riservato alla valutazione, senza utilizzo nel tuning.\n- `outputs/holdout_confusion_matrix.csv`: falsi positivi, falsi negativi e predizioni corrette sullo stesso holdout, **solo come analisi descrittiva finale**.
 - `outputs/tuning_<modello>.csv`: dettagli delle ricerche degli iperparametri.
 - `outputs/submission.csv`: colonne `PassengerId` e `Transported`, pronta per il controllo su Kaggle.
 - `data/processed/`: feature trasformate dal preprocessing finale e target, per ispezione.
@@ -46,7 +46,7 @@ L'esplorazione iniziale può aprire finestre grafiche: chiuderle per consentire 
 python -m unittest discover -s tests -v
 ```
 
-I test (20 previsti dopo l'aggiunta di due test sullo Strategy Pattern) usano **la stessa implementazione del preprocessing della pipeline principale** e coprono la gestione delle spese mancanti (FE-01), gruppi e cognomi (FE-02), indipendenza statistica dei fold (VAL-01), imputazioni categoriche e mediana frazionaria delle cabine (EXP-02). L'esito deve essere verificato nuovamente dopo ogni aggiornamento.
+I test automatizzati usano **la stessa implementazione del preprocessing della pipeline principale** e coprono la gestione delle spese mancanti (FE-01), gruppi e cognomi (FE-02), indipendenza statistica dei fold (VAL-01), imputazioni categoriche e mediana frazionaria delle cabine (EXP-02). L'esito deve essere verificato nuovamente dopo ogni aggiornamento.
 
 ## Esperimento di robustezza EXP-02
 
@@ -60,6 +60,18 @@ Confronta **XGBoost** e **SVC** con parametri fissati dalla precedente ricerca d
 - `StratifiedGroupKFold`: evita che membri dello stesso gruppo di viaggio compaiano in training e validazione contemporaneamente.
 
 L'esperimento usa **solo i dati di sviluppo** ed esporta `outputs/exp02_fold_results.csv` e `outputs/exp02_summary.csv`. I fold ripetuti sono correlati: la loro deviazione standard è descrittiva, non un test di significatività.
+
+## Audit concettuale FIA e ablazione delle feature
+
+Lo split avviene prima dell'EDA supervisionata e prima di qualsiasi preprocessing appreso. Media/deviazione standard di `StandardScaler`, imputazioni e categorie del `OneHotEncoder` sono determinate dal solo training di ogni fold. `Group` è un identificativo numerico, non una misura continua; `Surname` è una feature ad alta cardinalità. Per verificare la loro utilità senza usare l'holdout è disponibile un esperimento **opzionale**, separato dal programma principale:
+
+```bash
+python -m src.feature_ablation
+```
+
+Confronta XGBoost e SVC con iperparametri già fissati usando gli stessi cinque fold stratificati sul solo 80% di sviluppo, nella configurazione originale e rimuovendo `Group`, `Surname`, o entrambe. Esporta `outputs/feature_ablation_folds.csv` e `outputs/feature_ablation_summary.csv`. Il codice non cambia automaticamente il modello finale, e la sua utilità non è ancora stata quantificata: **non dichiarare incrementi di Accuracy senza esecuzione**. Lo stesso holdout è stato consultato in EXP-01; non va riutilizzato per scegliere fra nuove feature. Per un confronto veramente nuovo e indipendente servirebbero dati aggiuntivi.
+
+L'EDA precedente era stata effettuata anche sulle etichette di tutto il training Kaggle: la nuova disposizione riduce questo rischio per esecuzioni future, ma non annulla retroattivamente l'osservazione delle etichette dell'holdout già avvenuta nel percorso sperimentale. `StratifiedGroupKFold` resta una verifica distinta di generalizzazione a gruppi non visti, non il separatore dell'holdout ordinario.
 
 ## Risultati disponibili e limiti
 
@@ -75,7 +87,7 @@ Le motivazioni di tutte le modifiche e i risultati sperimentali sono registrati 
 - `src/preprocessing.py`: **unico modulo operativo** per feature engineering e imputazione, appresi esclusivamente dai dati di training di ogni fold.
 - `src/model.py`: classificatori, pipeline scikit-learn, tuning e training.
 - `src/predict.py`: predizioni e creazione CSV Kaggle.
-- `src/robustness_experiment.py`: esperimento di stabilità.
+- `src/robustness_experiment.py`: esperimento di stabilità.\n- `src/feature_ablation.py`: analisi opzionale di sensibilità alle feature Group e Surname.
 - `tests/`: test unitari e di regressione.
 - `docs/REVIEW_DECISIONS.md`: registro tecnico del processo di revisione.
 
@@ -91,4 +103,4 @@ L'EDA in `src/data_analysis.py` è richiamata da `main.py` **prima** della suddi
 
 ## Stato
 
-Questo branch di semplificazione richiede la verifica dei test prima di essere integrato in `main`. Il merge non viene eseguito automaticamente.
+La struttura CLEAN-01 è stata integrata in `main` con test automatici superati. Le modifiche dell'audit FIA sono in un branch di revisione e richiedono ulteriori controlli e approvazione prima del merge.
