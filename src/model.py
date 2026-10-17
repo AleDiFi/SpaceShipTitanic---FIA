@@ -26,7 +26,7 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.svm import SVC
-from src.fold_preprocessing import FoldSafePreprocessor
+from src.preprocessing import FoldSafePreprocessor
 
 
 @dataclass(frozen=True)

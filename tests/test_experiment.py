@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import StratifiedGroupKFold
 
-from src.fold_preprocessing import FoldSafePreprocessor
+from src.preprocessing import FoldSafePreprocessor
 from src.robustness_experiment import development_partition, summarize_results
 
 
