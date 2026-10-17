@@ -46,7 +46,7 @@ L'esplorazione iniziale può aprire finestre grafiche: chiuderle per consentire 
 python -m unittest discover -s tests -v
 ```
 
-I test usano **la stessa implementazione del preprocessing della pipeline principale** e coprono la gestione delle spese mancanti (FE-01), gruppi e cognomi (FE-02), indipendenza statistica dei fold (VAL-01), imputazioni categoriche e mediana frazionaria delle cabine (EXP-02). L'esito deve essere verificato nuovamente dopo ogni aggiornamento.
+I test (20 previsti dopo l'aggiunta di due test sullo Strategy Pattern) usano **la stessa implementazione del preprocessing della pipeline principale** e coprono la gestione delle spese mancanti (FE-01), gruppi e cognomi (FE-02), indipendenza statistica dei fold (VAL-01), imputazioni categoriche e mediana frazionaria delle cabine (EXP-02). L'esito deve essere verificato nuovamente dopo ogni aggiornamento.
 
 ## Esperimento di robustezza EXP-02
 
@@ -78,6 +78,12 @@ Le motivazioni di tutte le modifiche e i risultati sperimentali sono registrati 
 - `src/robustness_experiment.py`: esperimento di stabilità.
 - `tests/`: test unitari e di regressione.
 - `docs/REVIEW_DECISIONS.md`: registro tecnico del processo di revisione.
+
+## Design pattern richiesto dal corso
+
+Il Feature Engineering usa effettivamente lo **Strategy Pattern**: `FeatureTransformer` definisce l'interfaccia astratta, mentre `GroupTransformer`, `SurnameTransformer`, `CabinTransformer`, `AgeGroupTransformer` e `SpendingTransformer` implementano le singole strategie. `FeatureEngineeringPipeline` applica le strategie nell'ordine scelto. Il tutto è contenuto nel **solo** `src/preprocessing.py`, senza duplicati. `FoldSafePreprocessor` coordina le strategie e impara le statistiche di imputazione esclusivamente dal training fold; mantiene l'interfaccia scikit-learn `fit/transform`. Non è il Factory Pattern: la factory crea oggetti, la strategia incapsula comportamenti sostituibili.
+
+L'EDA in `src/data_analysis.py` è richiamata da `main.py` **prima** della suddivisione e del preprocessing. Le statistiche di fit, invece, non vengono apprese dai fold di validazione.
 
 ## Architettura lineare
 
