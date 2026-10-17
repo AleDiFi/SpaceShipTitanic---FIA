@@ -7,6 +7,8 @@ receive a conservative size of one, not a peek at validation passengers.
 """
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
+
 import numpy as np
 import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin
@@ -34,13 +36,29 @@ def _age_groups(age: pd.Series) -> pd.Series:
     return result
 
 
-class FoldSafePreprocessor(BaseEstimator, TransformerMixin):
-    """Learn train-fold-only statistics, and apply them to unseen passengers."""
 
-    def _extract(self, X):
-        frame = X.copy().reset_index(drop=True)
+class FeatureTransformer(ABC):
+    """Strategy: one clearly identified feature transformation."""
+
+    @abstractmethod
+    def transform(self, frame: pd.DataFrame) -> pd.DataFrame:
+        """Return data with new features; never learn validation statistics."""
+
+
+class GroupTransformer(FeatureTransformer):
+    def transform(self, frame):
         frame["Group"] = frame["PassengerId"].astype("string").str.split("_").str[0].astype(int)
+        return frame
+
+
+class SurnameTransformer(FeatureTransformer):
+    def transform(self, frame):
         frame["Surname"] = frame["Name"].astype("string").str.split().str[-1].astype(object)
+        return frame
+
+
+class CabinTransformer(FeatureTransformer):
+    def transform(self, frame):
         cabin = frame["Cabin"].astype("string").str.split("/", n=2, expand=True).reindex(columns=[0, 1, 2])
         frame["Cabin_deck"] = cabin[0].astype(object)
         frame["Cabin_number"] = pd.to_numeric(cabin[1], errors="coerce").astype("float64")
@@ -54,8 +72,45 @@ class FoldSafePreprocessor(BaseEstimator, TransformerMixin):
             else:
                 region = (frame["Cabin_number"] > lower) & (frame["Cabin_number"] <= n * 300)
             frame[f"Cabin_region{n}"] = region.fillna(False).astype(int)
-        frame = frame.drop(columns=["PassengerId", "Name", "Cabin"])
         return frame
+
+
+class AgeGroupTransformer(FeatureTransformer):
+    def transform(self, frame):
+        frame = FeatureEngineeringPipeline([AgeGroupTransformer()]).transform(frame)
+        return frame
+
+
+class SpendingTransformer(FeatureTransformer):
+    """Derive features only after expenses have been imputed."""
+    def transform(self, frame):
+        frame["Expenditure"] = frame[list(EXPENSE_COLUMNS)].sum(axis=1)
+        frame["No_spending"] = frame[list(EXPENSE_COLUMNS)].eq(0).all(axis=1).astype(int)
+        return frame
+
+
+class FeatureEngineeringPipeline:
+    """Apply the supplied feature strategies in a clear, explicit order."""
+
+    def __init__(self, transformers):
+        self.transformers = list(transformers)
+
+    def transform(self, frame):
+        for transformer in self.transformers:
+            frame = transformer.transform(frame)
+        return frame
+
+
+class FoldSafePreprocessor(BaseEstimator, TransformerMixin):
+    """Learn train-fold-only statistics, and apply them to unseen passengers."""
+
+    def _extract(self, X):
+        frame = X.copy().reset_index(drop=True)
+        # Structural feature strategies do not compute learned statistics.
+        frame = FeatureEngineeringPipeline([
+            GroupTransformer(), SurnameTransformer(), CabinTransformer(),
+        ]).transform(frame)
+        return frame.drop(columns=["PassengerId", "Name", "Cabin"])
 
     def fit(self, X, y=None):
         source = self._extract(X)
@@ -127,7 +182,6 @@ class FoldSafePreprocessor(BaseEstimator, TransformerMixin):
             keys = list(zip(frame["Age_group"], frame["HomePlanet"], frame["VIP"]))
             estimates = pd.Series([grouped.get(key, np.nan) for key in keys], index=frame.index)
             frame[col] = frame[col].fillna(estimates).fillna(self.spending_medians_[col])
-        frame["Expenditure"] = frame[list(EXPENSE_COLUMNS)].sum(axis=1)
-        frame["No_spending"] = frame[list(EXPENSE_COLUMNS)].eq(0).all(axis=1).astype(int)
+        frame = FeatureEngineeringPipeline([SpendingTransformer()]).transform(frame)
         frame["Cabin_number"] = frame["Cabin_number"].fillna(self.cabin_median_)
         return frame
