@@ -123,7 +123,6 @@ def build_model_zoo(cfg: ModelConfig) -> dict[str, object]:
     zoo: dict[str, object] = {
         "logistic_regression": LogisticRegression(
             max_iter=2000,
-            n_jobs=cfg.n_jobs,
             solver="lbfgs",
         ),
         "knn": KNeighborsClassifier(n_neighbors=15, weights="distance"),
