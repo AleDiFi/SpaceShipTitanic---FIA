@@ -66,3 +66,19 @@ User clarified an explicit course requirement: the feature transformations must 
 
 ### CLEAN-01 remote verification setup
 Because the user is working from a phone, configured `.github/workflows/tests.yml` to run the regression suite on GitHub Actions using Python 3.11. Opened draft PR #3 (https://github.com/AleDiFi/SpaceShipTitanic---FIA/pull/3) for automated checks only. No merge and no changes to main. At setup time, workflow run #39037997636 was in progress; only an explicitly completed successful run establishes a passed verification.
+
+## AUDIT-01 — Review finale di correttezza concettuale FIA (17 October 2026)
+The user explicitly requested a full methodological review after CLEAN-01 and approved targeted improvements, not a merge into `main`.
+
+**Verified reasoning in the current implementation:** (1) raw labeled data are split 80/20 before any fitted preprocessing; (2) learned imputation and group frequencies are fit inside `FoldSafePreprocessor` on the train subset of each CV fold; (3) OneHotEncoder, StandardScaler (for SVC/KNN/logistic only) and the estimator share the sklearn Pipeline, so the validation fold cannot determine fitted transformation statistics; (4) five-fold stratified RandomizedSearchCV tunes only on development data, using accuracy to select a model; (5) the selected model is evaluated on a separate holdout and then refit on all labeled train for Kaggle submission; (6) the optional group-aware repeated CV EXP-02 checks an alternative scenario.
+
+**Improvements on branch `review/fia-conceptual-audit`:**
+- Move target-aware EDA AFTER the 80/20 raw split and pass only development labels to `run_full_analysis`; Kaggle test remains unlabeled. This improves future evaluation hygiene, though original EXP-01 EDA previously showed full labeled train and thus cannot retroactively restore a blind holdout.
+- Save an explicit two-by-two holdout confusion matrix `outputs/holdout_confusion_matrix.csv` with fixed labels 0/1 to explain false positives/negatives. Do not use it for model or feature selection.
+- Remove the deprecated `n_jobs` argument from `LogisticRegression`, preserving its other settings.
+- Add optional `src/feature_ablation.py` experiment: compare fixed previously tuned SVC and XGBoost on the same 5 development folds with/without numeric `Group`, categorical `Surname`, or both; never use holdout, never auto-modify main model. No ablation performance claims before execution.
+- Add three inexpensive regression checks for feature dropping and model-relative summary differences, and update README.
+
+**Scientific caveats still needing clear presentation:** `Group` is an identifier numerically represented rather than a genuine continuous quantity; `Surname` OHE is high-cardinality; `Family_size` is a surname-frequency proxy and `Solo` reflects the observed training cohort; `No_spending` can reflect imputed expense zeroes. Group overlap remains possible in ordinary stratified CV and holdout, even though all learned statistics are fit only on the respective training subset. Repeated CV folds are correlated; a tiny average XGBoost vs SVC advantage is not evidence of general superiority. RandomizedSearchCV only searches sampled configurations and our design is not full nested CV. The previously observed EXP-01 holdout score is not a new Kaggle leaderboard score. The tests do not establish statistical utility of every derived feature.
+
+**Verification gate:** source changes committed to a dedicated review branch; the new suite and optional ablation require separate checks before accepting results. `main` must not be merged without explicit user approval.
