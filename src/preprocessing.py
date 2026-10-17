@@ -77,7 +77,7 @@ class CabinTransformer(FeatureTransformer):
 
 class AgeGroupTransformer(FeatureTransformer):
     def transform(self, frame):
-        frame = FeatureEngineeringPipeline([AgeGroupTransformer()]).transform(frame)
+        frame["Age_group"] = _age_groups(frame["Age"])
         return frame
 
 
@@ -168,7 +168,7 @@ class FoldSafePreprocessor(BaseEstimator, TransformerMixin):
                 lambda value: value if pd.notna(value) else fallback
             ).astype(object)
         frame["Age"] = frame["Age"].fillna(self.age_median_)
-        frame["Age_group"] = _age_groups(frame["Age"])
+        frame = FeatureEngineeringPipeline([AgeGroupTransformer()]).transform(frame)
         return frame
 
     def transform(self, X):
