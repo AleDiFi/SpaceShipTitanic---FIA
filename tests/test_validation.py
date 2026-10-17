@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import StratifiedKFold, cross_validate
 
-from src.fold_preprocessing import FoldSafePreprocessor
+from src.preprocessing import FoldSafePreprocessor
 from src.model import ModelConfig, _build_pipeline_for_model, build_model_zoo
 
 
