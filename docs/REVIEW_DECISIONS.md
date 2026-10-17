@@ -49,3 +49,9 @@ User supplied terminal output and generated CSV files. Complete pipeline exited 
 - Fixed test robustness: assertions for CryoSleep/VIP compare boolean values, not Python object identity (which can differ for NumPy/Pandas boolean scalars).
 - Replaced outdated placeholder README with execution requirements, experiment commands, output descriptions, measured scores, limitations, and a warning that legacy preprocessing is not used by the new main pipeline.
 - Outstanding release gate: the complete 18-test suite must be executed after these latest commits. The end-to-end EXP-01 and EXP-02 CSVs were generated on earlier branch revisions, not a new full pipeline run after the documentation and regression-test edits. No release/merge approval has been given; main remains unchanged.
+
+### Final regression gate — 17 October 2026
+- User ran `python -m unittest discover -s tests -v` using the project's virtual environment and reported **Ran 18 tests in 0.682s — OK**, no errors or failures. This validates FE-01, FE-02, VAL-01 and EXP-02 unit/regression test coverage after latest code/test changes.
+- An earlier run with global Python 3.13 failed during Matplotlib import (`KeyboardInterrupt` followed by a partially initialized Matplotlib error); the project virtual environment run passed. This was an interpreter/environment selection issue, not evidence of model regression.
+- The EXP-01 full-data pipeline and EXP-02 robustness experiment succeeded on earlier revisions. Their scores and caveats remain recorded above. The passing 18-test run is not an additional full tuning run or a new leaderboard score.
+- Final review status: release candidate with 18/18 tests passing, awaiting explicit user approval for any merge into `main`. No merge performed.
