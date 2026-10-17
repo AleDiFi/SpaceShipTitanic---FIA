@@ -8,7 +8,9 @@ import unittest
 import numpy as np
 import pandas as pd
 
-from src.preprocessing import FoldSafePreprocessor
+from src.preprocessing import (FoldSafePreprocessor, FeatureTransformer, FeatureEngineeringPipeline,
+                               GroupTransformer, SurnameTransformer, CabinTransformer,
+                               AgeGroupTransformer, SpendingTransformer)
 
 
 EXPENSES = ("RoomService", "FoodCourt", "ShoppingMall", "Spa", "VRDeck")
@@ -31,6 +33,22 @@ def passengers(ids, names=None, cryosleep=None):
         "VRDeck": [0.] * n,
         "Name": names if names is not None else [f"Person{i} Rossi" for i in range(n)],
     })
+
+
+class StrategyPatternTests(unittest.TestCase):
+    def test_feature_transformers_implement_strategy_interface(self):
+        for strategy in (GroupTransformer(), SurnameTransformer(), CabinTransformer(),
+                         AgeGroupTransformer(), SpendingTransformer()):
+            self.assertIsInstance(strategy, FeatureTransformer)
+
+    def test_pipeline_applies_strategies_in_order(self):
+        frame = passengers(["0001_01"], names=["Anna Rossi"])
+        out = FeatureEngineeringPipeline([
+            GroupTransformer(), SurnameTransformer(), CabinTransformer()
+        ]).transform(frame.copy())
+        self.assertEqual(out.loc[0, "Group"], 1)
+        self.assertEqual(out.loc[0, "Surname"], "Rossi")
+        self.assertEqual(out.loc[0, "Cabin_deck"], "G")
 
 
 class GroupFamilyTests(unittest.TestCase):
