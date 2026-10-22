@@ -1,7 +1,8 @@
-"""FIA review: assess whether Group and Surname features help, without holdout reuse.
+"""Studio dell'utilità delle caratteristiche derivate senza consultare l'holdout.
 
-Run separately: python -m src.feature_ablation
-This diagnostic NEVER selects parameters from the holdout.
+Esecuzione: python -m src.feature_ablation
+Tutte le configurazioni sono valutate sugli stessi cinque fold di sviluppo.
+Le differenze di accuracy sono descrittive, non prove di superiorità statistica.
 """
 from pathlib import Path
 
@@ -15,7 +16,7 @@ from src.robustness_experiment import FIXED_PARAMS, development_partition
 
 
 class DropColumns(BaseEstimator, TransformerMixin):
-    """Remove selected derived features between feature engineering and encoding."""
+    """Esclude le caratteristiche richieste dopo il FE e prima della codifica."""
 
     def __init__(self, columns=()):
         self.columns = columns
@@ -27,33 +28,45 @@ class DropColumns(BaseEstimator, TransformerMixin):
         return X.drop(columns=list(self.columns), errors="raise")
 
 
+# Nessun valore di target o del test Kaggle interviene nella selezione.
 FEATURE_SETS = {
     "baseline": (),
     "no_group_id": ("Group",),
     "no_surname": ("Surname",),
     "no_group_id_or_surname": ("Group", "Surname"),
+    "no_spending_derived": ("Expenditure", "No_spending"),
+    "no_cabin_regions": tuple(f"Cabin_region{i}" for i in range(1, 8)),
+    "no_group_family_derived": ("Group_size", "Solo", "Family_size"),
+    "no_age_group": ("Age_group",),
 }
+INDICATOR_VARIANT = "with_missing_indicators"
 
 
 def assess_features(X, y, models=("svc", "xgboost"), folds=5, seed=42):
-    """Evaluate fixed models on identical development folds across feature sets."""
+    """Confronta le famiglie di feature sui medesimi fold e parametri fissati."""
     cfg = ModelConfig(model_names=tuple(models), n_jobs=1)
     zoo = build_model_zoo(cfg)
     missing = set(models) - set(zoo)
     if missing:
-        raise RuntimeError(f"Models unavailable: {sorted(missing)}")
+        raise RuntimeError(f"Modelli non disponibili: {sorted(missing)}")
+
     rows = []
     cv = StratifiedKFold(n_splits=folds, shuffle=True, random_state=seed)
+    variants = dict(FEATURE_SETS)
+    variants[INDICATOR_VARIANT] = ()
     for fold, (train_idx, valid_idx) in enumerate(cv.split(X, y), start=1):
         train_X, valid_X = X.iloc[train_idx], X.iloc[valid_idx]
         train_y, valid_y = y.iloc[train_idx], y.iloc[valid_idx]
         for model_name in models:
-            for variant, columns in FEATURE_SETS.items():
+            for variant, columns in variants.items():
                 estimator = clone(zoo[model_name])
                 estimator.set_params(**FIXED_PARAMS[model_name])
-                pipeline = _build_pipeline_for_model(train_X, model_name, estimator)
+                pipeline = _build_pipeline_for_model(
+                    train_X, model_name, estimator,
+                    aggiungi_indicatori_mancanti=(variant == INDICATOR_VARIANT),
+                )
                 if columns:
-                    # Place the selector AFTER fold-safe FE and BEFORE One-Hot Encoding.
+                    # Rimozione delle feature dopo la loro creazione, prima dell'encoding.
                     pipeline.steps.insert(1, ("drop_features", DropColumns(columns=columns)))
                 pipeline.fit(train_X, train_y)
                 prediction = pipeline.predict(valid_X)
@@ -65,6 +78,7 @@ def assess_features(X, y, models=("svc", "xgboost"), folds=5, seed=42):
 
 
 def summarize_ablation(rows):
+    """Calcola la media e la differenza rispetto al medesimo modello completo."""
     summary = rows.groupby(["model", "variant"], as_index=False).agg(
         accuracy_mean=("accuracy", "mean"),
         accuracy_std=("accuracy", "std"),
@@ -87,7 +101,7 @@ def main():
     results.to_csv(output / "feature_ablation_folds.csv", index=False)
     summary.to_csv(output / "feature_ablation_summary.csv", index=False)
     print(summary.to_string(index=False))
-    print("Only the development partition was used. Do not infer holdout performance.")
+    print("Analizzato solo il set di sviluppo: non è una misura sull'holdout.")
 
 
 if __name__ == "__main__":
