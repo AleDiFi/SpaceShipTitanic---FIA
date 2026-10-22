@@ -1,8 +1,8 @@
-"""Spaceship Titanic: raw-data split, fold-safe preprocessing and final holdout.
+"""Spaceship Titanic: suddivisione dei dati, preprocessing e valutazione finale.
 
-The development partition is used for CV tuning; the independent holdout
-is evaluated only after selecting the best model. Final training uses all
-labeled Kaggle data before predicting the unlabeled test set.
+Il set di sviluppo viene utilizzato per la ricerca degli iperparametri tramite
+cross-validation. Il set di holdout è valutato dopo la scelta del modello.
+L'addestramento finale usa tutte le righe etichettate prima della submission.
 """
 
 from __future__ import annotations
@@ -32,14 +32,14 @@ def load_datasets(
     - data/raw/train.csv
     - data/raw/test.csv
 
-    Args:
+    Argomenti:
         train_path: Percorso al file di training (CSV).
         test_path: Percorso al file di test (CSV).
 
-    Returns:
+    Restituisce:
         (train, test) come DataFrame Pandas.
 
-    Raises:
+    Eccezioni:
         FileNotFoundError: Se uno dei due file non esiste.
     """
     base_dir = Path(__file__).resolve().parent
