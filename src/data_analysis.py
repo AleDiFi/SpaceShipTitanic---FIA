@@ -22,8 +22,8 @@ sns.set_theme(style="whitegrid")
 # =============================================================================
 def print_dataset_shapes(train: pd.DataFrame, test: pd.DataFrame) -> None:
     """Stampa le dimensioni del training e del test."""
-    print("Train set shape:", train.shape)
-    print("Test set shape:", test.shape)
+    print("Dimensioni del training set:", train.shape)
+    print("Dimensioni del test set:", test.shape)
 
 
 def preview_head(df: pd.DataFrame, label: str, n: int = 5) -> None:
@@ -34,30 +34,30 @@ def preview_head(df: pd.DataFrame, label: str, n: int = 5) -> None:
         label: Etichetta descrittiva per l'output testuale.
         n: Numero di righe da stampare.
     """
-    print(f"\n{label} preview (prime {n} righe):")
+    print(f"\n{label} - anteprima (prime {n} righe):")
     print(df.head(n))
 
 
 def report_missing_values(df: pd.DataFrame, label: str) -> None:
     """Stampa il numero di valori mancanti per colonna."""
-    print(f"\nMissing values in {label} set:\n", df.isnull().sum())
+    print(f"\nValori mancanti nel dataset {label}:\n", df.isnull().sum())
 
 
 def report_duplicates(df: pd.DataFrame, label: str) -> None:
     """Stampa il numero (e percentuale) di righe duplicate."""
     duplicated_rows = df.duplicated().sum()
     percentage = float(np.round(100 * duplicated_rows / len(df), 1)) if len(df) else 0.0
-    print(f"Number of duplicate rows in {label} set: {duplicated_rows} ({percentage}%)")
+    print(f"Righe duplicate nel dataset {label}: {duplicated_rows} ({percentage}%)")
 
 
 def report_cardinality(df: pd.DataFrame) -> None:
     """Stampa la cardinalità (valori unici) per colonna."""
-    print("\nFeature cardinality (valori unici per colonna):\n", df.nunique())
+    print("\nCardinalità delle caratteristiche (valori distinti):\n", df.nunique())
 
 
 def report_dtypes(df: pd.DataFrame) -> None:
     """Stampa i tipi di dato delle colonne."""
-    print("\nFeature data types:\n", df.dtypes)
+    print("\nTipi delle caratteristiche:\n", df.dtypes)
 
 
 # =============================================================================
@@ -68,7 +68,7 @@ def plot_target_distribution(train: pd.DataFrame, target_col: str = "Transported
     if target_col not in train.columns:
         print(
             f"Colonna '{target_col}' non presente nel dataset: "
-            "salto il target distribution plot."
+            "salto il target - distribuzione plot."
         )
         return
 
@@ -82,7 +82,7 @@ def plot_target_distribution(train: pd.DataFrame, target_col: str = "Transported
         shadow=True,
         textprops={"fontsize": 14},
         colors=colors,
-    ).set_title("Target Distribution", fontsize=18)
+    ).set_title("Distribuzione del target", fontsize=18)
     plt.ylabel("")
     plt.show(block=False)
 
@@ -106,9 +106,9 @@ def plot_age_distribution(
         kde=True,
         palette="pastel",
     )
-    plt.title("Age Distribution by Transported Status", fontsize=16)
-    plt.xlabel("Age (years)", fontsize=14)
-    plt.ylabel("Count", fontsize=14)
+    plt.title("Distribuzione dell'età per classe", fontsize=16)
+    plt.xlabel("Età (anni)", fontsize=14)
+    plt.ylabel("Conteggio", fontsize=14)
     if target_col in train.columns:
         plt.legend(title=target_col, fontsize=12)
     plt.show(block=False)
@@ -136,7 +136,7 @@ def plot_expense_distributions(
             kde=True,
             ax=axes[idx, 0],
         )
-        axes[idx, 0].set_title(f"{feature} distribution")
+        axes[idx, 0].set_title(f"{feature} - distribuzione")
 
         sns.histplot(
             data=train,
@@ -146,7 +146,7 @@ def plot_expense_distributions(
             ax=axes[idx, 1],
         )
         axes[idx, 1].set_ylim(0, zoom_ylim)
-        axes[idx, 1].set_title(f"{feature} distribution (zoom)")
+        axes[idx, 1].set_title(f"{feature} - distribuzione (ingrandimento)")
 
     fig.tight_layout()
     plt.show(block=False)
@@ -178,7 +178,7 @@ def plot_categorical_features(
         )
         ax.set_title(feature)
         ax.set_xlabel("")
-        ax.set_ylabel("Count")
+        ax.set_ylabel("Conteggio")
 
     fig.tight_layout()
     plt.show(block=False)
@@ -203,7 +203,7 @@ def preview_qualitative_features(
         print("Nessuna delle feature qualitative specificate è presente nel dataset.")
         return
 
-    print(f"\nPreview delle feature qualitative (prime {n} righe):")
+    print(f"\nAnteprima delle caratteristiche qualitative (prime {n} righe):")
     print(train[valid_features].head(n))
 
 
