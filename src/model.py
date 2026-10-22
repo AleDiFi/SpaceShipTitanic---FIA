@@ -26,7 +26,7 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.svm import SVC
-from src.preprocessing import FoldSafePreprocessor
+from src.preprocessing import PreprocessorePasseggeri
 
 
 @dataclass(frozen=True)
@@ -201,7 +201,7 @@ def _build_pipeline_for_model(
     )
     pipeline = Pipeline(
         steps=[
-            ("feature_preprocessing", FoldSafePreprocessor()),
+            ("feature_preprocessing", PreprocessorePasseggeri()),
             ("preprocessor", encoded),
             ("classifier", estimator),
         ]
