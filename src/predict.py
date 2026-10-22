@@ -18,7 +18,7 @@ from sklearn.pipeline import Pipeline
 
 
 # =============================================================================
-# SECTION: Helpers
+# SEZIONE: Funzioni di supporto
 # =============================================================================
 def _to_bool_predictions(pred: Iterable[int | bool]) -> pd.Series:
     """Converte predizioni 0/1 o bool nel formato bool richiesto da Kaggle."""
@@ -29,14 +29,14 @@ def _to_bool_predictions(pred: Iterable[int | bool]) -> pd.Series:
 
 
 # =============================================================================
-# SECTION: Predict
+# SEZIONE: Predizioni
 # =============================================================================
 def predict_test(model: Pipeline, test_processed: pd.DataFrame) -> pd.Series:
     """Esegue la predizione sul test set processato."""
     print("\n" + "=" * 60)
-    print("SPACESHIP TITANIC - Predict")
+    print("SPACESHIP TITANIC - Predizione")
     print("=" * 60)
-    print(f"[Predict] Shape test_processed: {test_processed.shape}")
+    print(f"[Predict] Dimensioni del test elaborato: {test_processed.shape}")
     print("[Predict] Predizione sul test set...")
     preds = model.predict(test_processed)
     preds_bool = _to_bool_predictions(preds)
@@ -46,7 +46,7 @@ def predict_test(model: Pipeline, test_processed: pd.DataFrame) -> pd.Series:
 
 
 # =============================================================================
-# SECTION: Submission
+# SEZIONE: Submission Kaggle
 # =============================================================================
 def build_submission(
     passenger_ids: pd.Series,
@@ -67,7 +67,7 @@ def build_submission(
 
 
 # =============================================================================
-# SECTION: Persistence
+# SEZIONE: Salvataggio dei risultati
 # =============================================================================
 def save_submission(submission: pd.DataFrame, output_path: Path) -> Path:
     """Salva la submission su disco."""

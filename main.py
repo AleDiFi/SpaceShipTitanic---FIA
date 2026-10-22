@@ -1,8 +1,8 @@
-"""Spaceship Titanic: raw-data split, fold-safe preprocessing and final holdout.
+"""Spaceship Titanic: suddivisione dei dati, preprocessing e valutazione finale.
 
-The development partition is used for CV tuning; the independent holdout
-is evaluated only after selecting the best model. Final training uses all
-labeled Kaggle data before predicting the unlabeled test set.
+Il set di sviluppo viene utilizzato per la ricerca degli iperparametri tramite
+cross-validation. Il set di holdout è valutato dopo la scelta del modello.
+L'addestramento finale usa tutte le righe etichettate prima della submission.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import pandas as pd
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
 
 from src.data_analysis import run_full_analysis
 from src.model import ModelConfig, build_model_zoo, fine_tune_model, fit_best_model, save_model_results
@@ -20,7 +20,7 @@ from src.predict import build_submission, predict_test, save_submission
 
 
 # =============================================================================
-# SECTION: Dataset Loading
+# SEZIONE: Caricamento dati
 # =============================================================================
 def load_datasets(
     train_path: Path | None = None,
@@ -32,14 +32,14 @@ def load_datasets(
     - data/raw/train.csv
     - data/raw/test.csv
 
-    Args:
+    Argomenti:
         train_path: Percorso al file di training (CSV).
         test_path: Percorso al file di test (CSV).
 
-    Returns:
+    Restituisce:
         (train, test) come DataFrame Pandas.
 
-    Raises:
+    Eccezioni:
         FileNotFoundError: Se uno dei due file non esiste.
     """
     base_dir = Path(__file__).resolve().parent
@@ -62,35 +62,38 @@ def load_datasets(
 
 
 # =============================================================================
-# SECTION: Main Pipeline
+# SEZIONE: Pipeline principale
 # =============================================================================
 def main() -> None:
     """Esegue l'intera pipeline: EDA -> FE -> Preprocessing -> Model -> Submission."""
     print("=" * 60)
-    print("SPACESHIP TITANIC - Fold-safe CV and holdout pipeline")
+    print("SPACESHIP TITANIC - Preparazione dati, validazione e holdout")
     print("=" * 60)
 
-    # 1) Load raw
-    print("\n[FASE 1] Caricamento dataset (raw)...")
+    # 1) Caricamento dei dati originali
+    print("\n[FASE 1] Caricamento dei dati originali...")
     train, test = load_datasets()
 
-    # 2) EDA
-    print("\n[FASE 2] Exploratory Data Analysis (raw)...")
-    run_full_analysis(train, test)
-
-    # VAL-01: split RAW training rows before fitting any data-dependent step.
-    # The Kaggle test set is never used to fit a validation-fold preprocessor.
+    # VAL-01: suddivisione delle righe originali prima dell'EDA supervisionata e del preprocessing.
+    # I dati di test Kaggle non intervengono nell'apprendimento delle statistiche dei fold.
     X = train.drop(columns=["Transported"])
     y = train["Transported"].astype(int)
     X_dev, X_holdout, y_dev, y_holdout = train_test_split(
         X, y, test_size=0.20, random_state=42, stratify=y,
     )
+    # L'EDA può analizzare il target soltanto sul set di sviluppo.
+    # Il test Kaggle è privo di etichette; l'EDA non osserva il target dell'holdout.
+    print("\n[FASE 2] Analisi esplorativa del solo set di sviluppo...")
+    eda_development = X_dev.copy()
+    eda_development["Transported"] = y_dev
+    run_full_analysis(eda_development, test)
+
     cfg = ModelConfig(
         target_col="Transported",
         cv_selection_metric="accuracy",
         tune_refit_metric="accuracy",
     )
-    print("[FASE 3] Fit/tuning sui soli dati di sviluppo (CV interna).")
+    print("[FASE 3] Addestramento e ricerca degli iperparametri sullo sviluppo.")
     base_dir = Path(__file__).resolve().parent
     outputs_dir = base_dir / "outputs"
     outputs_dir.mkdir(parents=True, exist_ok=True)
@@ -138,13 +141,13 @@ def main() -> None:
         .sort_values(f"{cfg.tune_refit_metric}_cv", ascending=False)
         .reset_index(drop=True)
     )
-    print(f"[INFO] Best model da CV+tuning ({cfg.tune_refit_metric}): {best_model_name}")
-    print("[INFO] Top modelli (CV+tuning):")
+    print(f"[INFO] Modello migliore da CV e ricerca ({cfg.tune_refit_metric}): {best_model_name}")
+    print("[INFO] Primi modelli per accuratezza CV:")
     print(results_df.head(5).to_string(index=False))
 
     save_model_results(results_df, outputs_dir / "model_results.csv")
 
-    # Holdout untouched by hyperparameter search and model selection.
+    # L'holdout non viene utilizzato per ricerca o selezione del modello.
     print("[FASE 4] Valutazione indipendente del modello selezionato.")
     holdout_model = fit_best_model(
         X_dev, y_dev, best_model_name=best_model_name, cfg=cfg, best_params=best_params,
@@ -158,9 +161,15 @@ def main() -> None:
         "f1": f1_score(y_holdout, holdout_preds, zero_division=0),
     }])
     save_model_results(holdout_results, outputs_dir / "holdout_results.csv")
-    print("[VAL-01] Holdout results:\n", holdout_results.to_string(index=False))
+    # Riepilogo descrittivo degli errori: non usarlo per modificare il modello.
+    matrix = confusion_matrix(y_holdout, holdout_preds, labels=[0, 1])
+    matrix_df = pd.DataFrame(matrix, index=["Actual_False", "Actual_True"],
+                             columns=["Pred_False", "Pred_True"])
+    matrix_df.to_csv(outputs_dir / "holdout_confusion_matrix.csv")
+    print("[VAL-01] Matrice di confusione sull'holdout:\n", matrix_df)
+    print("[VAL-01] Risultati della valutazione sull'holdout:\n", holdout_results.to_string(index=False))
 
-    print("[FASE 5] Fit finale su tutto il train Kaggle e submission.")
+    print("[FASE 5] Addestramento finale e creazione della submission.")
     final_model = fit_best_model(
         X, y, best_model_name=best_model_name, cfg=cfg, best_params=best_params,
     )
@@ -168,10 +177,10 @@ def main() -> None:
     submission = build_submission(test["PassengerId"], test_preds)
     save_submission(submission, outputs_dir / "submission.csv")
 
-    # Save feature tables generated by the final model's fitted preprocessor.
+    # Salvataggio delle caratteristiche prodotte dal preprocessing finale.
     processed_dir = base_dir / "data" / "processed"
     processed_dir.mkdir(parents=True, exist_ok=True)
-    feature_step = final_model.named_steps["feature_preprocessing"]
+    feature_step = final_model.named_steps["preparazione"]
     feature_step.transform(X).to_csv(processed_dir / "train_processed.csv", index=False)
     feature_step.transform(test).to_csv(processed_dir / "test_processed.csv", index=False)
     y.to_csv(processed_dir / "y_train.csv", index=False)
@@ -183,6 +192,7 @@ def main() -> None:
     print(f"Salvati: {processed_dir / 'y_train.csv'}")
     print(f"Salvati: {outputs_dir / 'model_results.csv'}")
     print(f"Salvati: {outputs_dir / 'holdout_results.csv'}")
+    print(f"Salvati: {outputs_dir / 'holdout_confusion_matrix.csv'}")
     print(f"Salvati: {outputs_dir / 'submission.csv'}")
     print("=" * 60)
 
