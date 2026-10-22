@@ -75,6 +75,34 @@ class CabinTransformer(FeatureTransformer):
         return frame
 
 
+class RelazioniTransformer(FeatureTransformer):
+    """Strategia con apprendimento dei conteggi di gruppi e cognomi.
+
+    fit() utilizza solo le righe del training; transform() applica le frequenze
+    già apprese e tratta i gruppi sconosciuti come gruppi di una sola persona.
+    """
+
+    def fit(self, frame):
+        self.group_counts_ = frame["Group"].value_counts().to_dict()
+        noti = frame.dropna(subset=["Surname"])
+        distinti = noti.groupby("Group")["Surname"].nunique()
+        compatibili = noti[noti["Group"].isin(distinti[distinti == 1].index)]
+        self.group_surname_ = compatibili.groupby("Group")["Surname"].first().to_dict()
+        cognomi = frame["Surname"].fillna(frame["Group"].map(self.group_surname_))
+        self.surname_counts_ = cognomi.value_counts().to_dict()
+        return self
+
+    def transform(self, frame):
+        frame = frame.copy()
+        frame["Surname"] = frame["Surname"].fillna(
+            frame["Group"].map(self.group_surname_)
+        ).fillna("Unknown").astype(object)
+        frame["Group_size"] = frame["Group"].map(self.group_counts_).fillna(1).astype(int)
+        frame["Solo"] = (frame["Group_size"] == 1).astype(int)
+        frame["Family_size"] = frame["Surname"].map(self.surname_counts_).fillna(0).astype(int)
+        return frame
+
+
 class AgeGroupTransformer(FeatureTransformer):
     def transform(self, frame):
         frame["Age_group"] = _age_groups(frame["Age"])
@@ -118,13 +146,11 @@ class PreprocessorePasseggeri(BaseEstimator, TransformerMixin):
 
     def fit(self, X, y=None):
         source = self._extract(X)
-        self.group_counts_ = source["Group"].value_counts().to_dict()
-        known = source.dropna(subset=["Surname"])
-        unique = known.groupby("Group")["Surname"].nunique()
-        compatible = known[known["Group"].isin(unique[unique == 1].index)]
-        self.group_surname_ = compatible.groupby("Group")["Surname"].first().to_dict()
-        source["Surname"] = source["Surname"].fillna(source["Group"].map(self.group_surname_))
-        self.surname_counts_ = source["Surname"].value_counts().to_dict()
+        # Le frequenze dei gruppi sono apprese mediante una strategia dedicata.
+        self.relazioni_ = RelazioniTransformer().fit(source)
+        self.group_counts_ = self.relazioni_.group_counts_
+        self.group_surname_ = self.relazioni_.group_surname_
+        self.surname_counts_ = self.relazioni_.surname_counts_
         known_planets = source.dropna(subset=["HomePlanet"])
         self.group_planet_ = known_planets.groupby("Group")["HomePlanet"].agg(
             lambda s: _mode(s, "Earth")
@@ -153,11 +179,7 @@ class PreprocessorePasseggeri(BaseEstimator, TransformerMixin):
 
     def _fill_basic(self, frame):
         frame = frame.copy()
-        frame["Surname"] = frame["Surname"].fillna(frame["Group"].map(self.group_surname_))
-        frame["Surname"] = frame["Surname"].fillna("Unknown").astype(object)
-        frame["Group_size"] = frame["Group"].map(self.group_counts_).fillna(1).astype(int)
-        frame["Solo"] = (frame["Group_size"] == 1).astype(int)
-        frame["Family_size"] = frame["Surname"].map(self.surname_counts_).fillna(0).astype(int)
+        frame = self.relazioni_.transform(frame)
 
         planet = frame["HomePlanet"].fillna(frame["Group"].map(self.group_planet_))
         planet = planet.mask(planet.isna() & frame["Cabin_deck"].isin(["A", "B", "C", "T"]), "Europa")
