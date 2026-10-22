@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 
 from src.preprocessing import (PreprocessorePasseggeri, FeatureTransformer, FeatureEngineeringPipeline,
-                               GroupTransformer, SurnameTransformer, CabinTransformer,
+                               GroupTransformer, SurnameTransformer, CabinTransformer, RelazioniTransformer,
                                AgeGroupTransformer, SpendingTransformer)
 
 
@@ -38,8 +38,19 @@ def passengers(ids, names=None, cryosleep=None):
 class StrategyPatternTests(unittest.TestCase):
     def test_feature_transformers_implement_strategy_interface(self):
         for strategy in (GroupTransformer(), SurnameTransformer(), CabinTransformer(),
-                         AgeGroupTransformer(), SpendingTransformer()):
+                         RelazioniTransformer(), AgeGroupTransformer(), SpendingTransformer()):
             self.assertIsInstance(strategy, FeatureTransformer)
+
+    def test_strategia_relazioni_non_apprende_dalla_validazione(self):
+        train = passengers(["0042_01", "0050_01"], ["Ana Rossi", "Leo Verdi"])
+        valid = passengers(["0042_02", "0099_01"], ["Mia Rossi", "Lia Neri"])
+        base = FeatureEngineeringPipeline([
+            GroupTransformer(), SurnameTransformer()
+        ])
+        strategia = RelazioniTransformer().fit(base.transform(train.copy()))
+        trasformati = strategia.transform(base.transform(valid.copy()))
+        self.assertEqual(trasformati["Group_size"].tolist(), [1, 1])
+        self.assertEqual(trasformati["Family_size"].tolist(), [1, 0])
 
     def test_pipeline_applies_strategies_in_order(self):
         frame = passengers(["0001_01"], names=["Anna Rossi"])
