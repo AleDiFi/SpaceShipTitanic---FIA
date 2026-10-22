@@ -1,4 +1,4 @@
-"""VAL-01 tests: unseen validation rows cannot change fitted preprocessing."""
+"""Test VAL-01: i dati di validazione non modificano le statistiche apprese."""
 import unittest
 
 import numpy as np
