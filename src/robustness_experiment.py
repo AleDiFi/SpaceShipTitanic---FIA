@@ -117,7 +117,7 @@ def main():
     results.to_csv(output_dir / "exp02_fold_results.csv", index=False)
     summary.to_csv(output_dir / "exp02_summary.csv", index=False)
     print(summary.to_string(index=False))
-    print("\nSaved EXP-02 results in outputs/. Original holdout is untouched.")
+    print("\nRisultati EXP-02 salvati in outputs/. L'holdout non è stato utilizzato.")
 
 
 if __name__ == "__main__":
