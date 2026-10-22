@@ -30,7 +30,7 @@ def passengers(n=12):
     return pd.DataFrame(rows)
 
 
-class FoldSafeTests(unittest.TestCase):
+class PreprocessingTests(unittest.TestCase):
     def test_holdout_age_cannot_change_fitted_training_median(self):
         train = passengers(6)
         train.loc[0, "Age"] = np.nan
