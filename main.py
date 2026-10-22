@@ -67,7 +67,7 @@ def load_datasets(
 def main() -> None:
     """Esegue l'intera pipeline: EDA -> FE -> Preprocessing -> Model -> Submission."""
     print("=" * 60)
-    print("SPACESHIP TITANIC - Fold-safe CV and holdout pipeline")
+    print("SPACESHIP TITANIC - Preparazione dati, validazione e holdout")
     print("=" * 60)
 
     # 1) Caricamento dei dati originali
@@ -180,7 +180,7 @@ def main() -> None:
     # Salvataggio delle caratteristiche prodotte dal preprocessing finale.
     processed_dir = base_dir / "data" / "processed"
     processed_dir.mkdir(parents=True, exist_ok=True)
-    feature_step = final_model.named_steps["feature_preprocessing"]
+    feature_step = final_model.named_steps["preparazione"]
     feature_step.transform(X).to_csv(processed_dir / "train_processed.csv", index=False)
     feature_step.transform(test).to_csv(processed_dir / "test_processed.csv", index=False)
     y.to_csv(processed_dir / "y_train.csv", index=False)
