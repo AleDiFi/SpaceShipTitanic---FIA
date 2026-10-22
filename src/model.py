@@ -300,7 +300,7 @@ def evaluate_models(
     """
     cfg = cfg or ModelConfig()
     print("\n" + "=" * 60)
-    print("SPACESHIP TITANIC - Model Selection (holdout)")
+    print("SPACESHIP TITANIC - Selezione dei modelli (holdout)")
     print("=" * 60)
 
     y_num = _ensure_numeric_target(y)
@@ -320,7 +320,7 @@ def evaluate_models(
 
     for model_name, estimator in zoo.items():
         print("-" * 60)
-        print(f"[Model] Training: {model_name}")
+        print(f"[Modelli] Addestramento: {model_name}")
 
         pipeline = _build_pipeline_for_model(X_train, model_name, estimator)
         pipeline.fit(X_train, y_train)
@@ -351,7 +351,7 @@ def evaluate_models(
     print("-" * 60)
     print("[Model] Classifica modelli (top 5):")
     print(results_df.head(5).to_string(index=False))
-    print(f"[Model] Best model selezionato: {best_model_name}")
+    print(f"[Modelli] Modello selezionato: {best_model_name}")
     print("=" * 60 + "\n")
 
     return results_df, best_model_name
@@ -370,7 +370,7 @@ def evaluate_models_cv(
     _validate_scoring_metric(cfg.cv_selection_metric)
 
     print("\n" + "=" * 60)
-    print(f"SPACESHIP TITANIC - Model Selection (CV {cfg.cv_folds}-fold)")
+    print(f"SPACESHIP TITANIC - Selezione dei modelli (CV {cfg.cv_folds}-fold)")
     print("=" * 60)
 
     y_num = _ensure_numeric_target(y)
@@ -390,7 +390,7 @@ def evaluate_models_cv(
 
     for model_name, estimator in zoo.items():
         print("-" * 60)
-        print(f"[Model][CV] Training+Validation: {model_name}")
+        print(f"[Model][CV] Addestramento e validazione: {model_name}")
 
         pipeline = _build_pipeline_for_model(X, model_name, estimator)
         cv_scores = cross_validate(
@@ -428,7 +428,7 @@ def evaluate_models_cv(
     print("-" * 60)
     print("[Model][CV] Classifica modelli (top 5):")
     print(results_df.head(5).to_string(index=False))
-    print(f"[Model][CV] Best model selezionato ({cfg.cv_selection_metric}): {best_model_name}")
+    print(f"[Model][CV] Modello selezionato ({cfg.cv_selection_metric}): {best_model_name}")
     print("=" * 60 + "\n")
 
     return results_df, best_model_name
@@ -495,8 +495,8 @@ def fine_tune_model(
         .reset_index(drop=True)
     )
 
-    print(f"[Model][Tune] Best {cfg.tune_refit_metric}: {best_score:.4f}")
-    print(f"[Model][Tune] Best params: {best_params}")
+    print(f"[Model][Tune] Migliore {cfg.tune_refit_metric}: {best_score:.4f}")
+    print(f"[Model][Tune] Iperparametri selezionati: {best_params}")
     print("=" * 60 + "\n")
 
     return best_pipeline, best_params, tuning_results_df
@@ -526,7 +526,7 @@ def fit_best_model(
 ) -> Pipeline:
     """Addestra il modello selezionato su tutti i dati di training disponibili."""
     cfg = cfg or ModelConfig()
-    print("[Model] Fit finale del best model su tutto il training set...")
+    print("[Model] Addestramento finale del modello selezionato su tutto il training set...")
 
     y_num = _ensure_numeric_target(y)
     zoo = build_model_zoo(cfg)
