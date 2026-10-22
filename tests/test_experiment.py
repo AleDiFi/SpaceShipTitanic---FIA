@@ -1,4 +1,4 @@
-"""EXP-02 regression tests for categorical fill and group-aware validation."""
+"""Test EXP-02: imputazione delle categorie e validazione per gruppi."""
 import unittest
 import warnings
 
