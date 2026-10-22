@@ -56,7 +56,7 @@ class ModelConfig:
 
 
 # =============================================================================
-# SECTION: Helpers (Target + Feature Types)
+# SEZIONE: Funzioni di supporto (target e tipi di feature)
 # =============================================================================
 def _ensure_numeric_target(y: pd.Series) -> pd.Series:
     """Converte il target a 0/1 in modo robusto."""
@@ -78,7 +78,7 @@ def _split_feature_types(df: pd.DataFrame) -> tuple[list[str], list[str]]:
 
 
 # =============================================================================
-# SECTION: Preprocessor
+# SEZIONE: Preparazione delle caratteristiche
 # =============================================================================
 def build_preprocessor(
     categorical_cols: Iterable[str],
@@ -116,7 +116,7 @@ def build_preprocessor(
 
 
 # =============================================================================
-# SECTION: Model Zoo + Rules
+# SEZIONE: Modelli candidati e regole
 # =============================================================================
 def build_model_zoo(cfg: ModelConfig) -> dict[str, object]:
     """Crea il dizionario nome -> estimator, rispettando i vincoli del repo."""
@@ -189,7 +189,7 @@ def _build_pipeline_for_model(
     aggiungi_indicatori_mancanti: bool = False,
 ) -> Pipeline:
     """Crea la pipeline (preprocessor + estimator) adatta al modello."""
-    # Column selectors are resolved AFTER fold-safe feature engineering.
+    # Le colonne vengono selezionate DOPO il Feature Engineering, separatamente per fold.
     scale_numeric = _model_requires_scaling(model_name)
     dense_matrix = _model_requires_dense_matrix(model_name)
     cat = OneHotEncoder(handle_unknown="ignore", sparse_output=not dense_matrix)
@@ -239,7 +239,7 @@ def _validate_scoring_metric(metric_name: str) -> None:
 
 
 # =============================================================================
-# SECTION: Hyperparameter Search Spaces
+# SEZIONE: Spazi di ricerca degli iperparametri
 # =============================================================================
 def build_param_distributions(model_name: str) -> dict[str, list[object]]:
     """Restituisce gli spazi di ricerca per RandomizedSearchCV per ciascun modello."""
@@ -285,7 +285,7 @@ def build_param_distributions(model_name: str) -> dict[str, list[object]]:
 
 
 # =============================================================================
-# SECTION: Model Evaluation
+# SEZIONE: Valutazione dei modelli
 # =============================================================================
 def evaluate_models(
     X: pd.DataFrame,
@@ -358,7 +358,7 @@ def evaluate_models(
 
 
 # =============================================================================
-# SECTION: Model Evaluation (Cross Validation)
+# SEZIONE: Valutazione dei modelli con cross-validation
 # =============================================================================
 def evaluate_models_cv(
     X: pd.DataFrame,
@@ -435,7 +435,7 @@ def evaluate_models_cv(
 
 
 # =============================================================================
-# SECTION: Hyperparameter Tuning
+# SEZIONE: Ricerca degli iperparametri
 # =============================================================================
 def fine_tune_model(
     X: pd.DataFrame,
@@ -503,7 +503,7 @@ def fine_tune_model(
 
 
 # =============================================================================
-# SECTION: Persistence
+# SEZIONE: Salvataggio dei risultati
 # =============================================================================
 def save_model_results(results_df: pd.DataFrame, output_path: Path) -> Path:
     """Salva la classifica dei modelli in CSV."""
@@ -515,7 +515,7 @@ def save_model_results(results_df: pd.DataFrame, output_path: Path) -> Path:
 
 
 # =============================================================================
-# SECTION: Final Fit
+# SEZIONE: Addestramento finale
 # =============================================================================
 def fit_best_model(
     X: pd.DataFrame,
