@@ -34,9 +34,9 @@ def _to_bool_predictions(pred: Iterable[int | bool]) -> pd.Series:
 def predict_test(model: Pipeline, test_processed: pd.DataFrame) -> pd.Series:
     """Esegue la predizione sul test set processato."""
     print("\n" + "=" * 60)
-    print("SPACESHIP TITANIC - Predict")
+    print("SPACESHIP TITANIC - Predizione")
     print("=" * 60)
-    print(f"[Predict] Shape test_processed: {test_processed.shape}")
+    print(f"[Predict] Dimensioni del test elaborato: {test_processed.shape}")
     print("[Predict] Predizione sul test set...")
     preds = model.predict(test_processed)
     preds_bool = _to_bool_predictions(preds)
