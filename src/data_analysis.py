@@ -12,13 +12,13 @@ import seaborn as sns
 
 
 # =============================================================================
-# SECTION: Global Plot Settings
+# SEZIONE: Impostazioni dei grafici
 # =============================================================================
 sns.set_theme(style="whitegrid")
 
 
 # =============================================================================
-# SECTION: Report Utilities
+# SEZIONE: Funzioni di riepilogo
 # =============================================================================
 def print_dataset_shapes(train: pd.DataFrame, test: pd.DataFrame) -> None:
     """Stampa la shape di train e test."""
@@ -61,7 +61,7 @@ def report_dtypes(df: pd.DataFrame) -> None:
 
 
 # =============================================================================
-# SECTION: Plots
+# SEZIONE: Grafici
 # =============================================================================
 def plot_target_distribution(train: pd.DataFrame, target_col: str = "Transported") -> None:
     """Mostra la distribuzione del target con un grafico a torta."""
@@ -208,7 +208,7 @@ def preview_qualitative_features(
 
 
 # =============================================================================
-# SECTION: Full EDA
+# SEZIONE: Analisi esplorativa completa
 # =============================================================================
 def run_full_analysis(train: pd.DataFrame, test: pd.DataFrame) -> None:
     """Esegue in sequenza tutte le fasi dell'EDA e organizza le visualizzazioni.
