@@ -71,7 +71,7 @@ def main() -> None:
     print("=" * 60)
 
     # 1) Caricamento dei dati originali
-    print("\n[FASE 1] Caricamento dataset (raw)...")
+    print("\n[FASE 1] Caricamento dei dati originali...")
     train, test = load_datasets()
 
     # VAL-01: suddivisione delle righe originali prima dell'EDA supervisionata e del preprocessing.
@@ -83,7 +83,7 @@ def main() -> None:
     )
     # L'EDA può analizzare il target soltanto sul set di sviluppo.
     # Il test Kaggle è privo di etichette; l'EDA non osserva il target dell'holdout.
-    print("\n[FASE 2] Exploratory Data Analysis (development data only)...")
+    print("\n[FASE 2] Analisi esplorativa del solo set di sviluppo...")
     eda_development = X_dev.copy()
     eda_development["Transported"] = y_dev
     run_full_analysis(eda_development, test)
@@ -93,7 +93,7 @@ def main() -> None:
         cv_selection_metric="accuracy",
         tune_refit_metric="accuracy",
     )
-    print("[FASE 3] Fit/tuning sui soli dati di sviluppo (CV interna).")
+    print("[FASE 3] Addestramento e ricerca degli iperparametri sullo sviluppo.")
     base_dir = Path(__file__).resolve().parent
     outputs_dir = base_dir / "outputs"
     outputs_dir.mkdir(parents=True, exist_ok=True)
@@ -141,8 +141,8 @@ def main() -> None:
         .sort_values(f"{cfg.tune_refit_metric}_cv", ascending=False)
         .reset_index(drop=True)
     )
-    print(f"[INFO] Best model da CV+tuning ({cfg.tune_refit_metric}): {best_model_name}")
-    print("[INFO] Top modelli (CV+tuning):")
+    print(f"[INFO] Modello migliore da CV e ricerca ({cfg.tune_refit_metric}): {best_model_name}")
+    print("[INFO] Primi modelli per accuratezza CV:")
     print(results_df.head(5).to_string(index=False))
 
     save_model_results(results_df, outputs_dir / "model_results.csv")
@@ -166,10 +166,10 @@ def main() -> None:
     matrix_df = pd.DataFrame(matrix, index=["Actual_False", "Actual_True"],
                              columns=["Pred_False", "Pred_True"])
     matrix_df.to_csv(outputs_dir / "holdout_confusion_matrix.csv")
-    print("[VAL-01] Holdout confusion matrix:\n", matrix_df)
-    print("[VAL-01] Holdout results:\n", holdout_results.to_string(index=False))
+    print("[VAL-01] Matrice di confusione sull'holdout:\n", matrix_df)
+    print("[VAL-01] Risultati della valutazione sull'holdout:\n", holdout_results.to_string(index=False))
 
-    print("[FASE 5] Fit finale su tutto il train Kaggle e submission.")
+    print("[FASE 5] Addestramento finale e creazione della submission.")
     final_model = fit_best_model(
         X, y, best_model_name=best_model_name, cfg=cfg, best_params=best_params,
     )
