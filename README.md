@@ -25,7 +25,7 @@ La procedura esegue:
 
 1. Caricamento dei dataset originali; successivamente si esegue l'EDA (`src/data_analysis.py`) dopo aver riservato l'holdout.
 2. Suddivisione stratificata delle righe etichettate: **80% sviluppo / 20% holdout**, seed 42. L'EDA supervisionata viene effettuata **dopo lo split**, usando solo i dati di sviluppo. L'holdout non è necessariamente indipendente per gruppi.
-3. Per ogni modello, ricerca degli iperparametri con `RandomizedSearchCV` sul solo set di sviluppo. Ogni fold addestra il proprio `FoldSafePreprocessor`, seguito da codifica delle categorie, eventuale scaling e classificatore.
+3. Per ogni modello, ricerca degli iperparametri con `RandomizedSearchCV` sul solo set di sviluppo. Ogni fold addestra il proprio `PreprocessorePasseggeri`, seguito da codifica delle categorie, eventuale scaling e classificatore.
 4. Selezione del modello in base alla **Accuracy** media di cross-validation; precision, recall e F1 restano metriche ausiliarie.
 5. Una sola valutazione del modello selezionato sull'holdout e successivo addestramento finale su tutti i dati etichettati.
 6. Predizione del test Kaggle e creazione di `outputs/submission.csv`.
@@ -87,13 +87,13 @@ Le motivazioni di tutte le modifiche e i risultati sperimentali sono registrati 
 - `src/preprocessing.py`: **unico modulo operativo** per feature engineering e imputazione, appresi esclusivamente dai dati di training di ogni fold.
 - `src/model.py`: classificatori, pipeline scikit-learn, tuning e training.
 - `src/predict.py`: predizioni e creazione CSV Kaggle.
-- `src/robustness_experiment.py`: esperimento di stabilità.\n- `src/feature_ablation.py`: analisi opzionale di sensibilità alle feature Group e Surname.
+- `src/robustness_experiment.py`: esperimento di stabilità.\n- `src/feature_ablation.py`: esperimento opzionale di ablazione per gruppi di caratteristiche e indicatori dei dati mancanti.
 - `tests/`: test unitari e di regressione.
 - `docs/REVIEW_DECISIONS.md`: registro tecnico del processo di revisione.
 
 ## Design pattern richiesto dal corso
 
-Il Feature Engineering usa effettivamente lo **Strategy Pattern**: `FeatureTransformer` definisce l'interfaccia astratta, mentre `GroupTransformer`, `SurnameTransformer`, `CabinTransformer`, `AgeGroupTransformer` e `SpendingTransformer` implementano le singole strategie. `FeatureEngineeringPipeline` applica le strategie nell'ordine scelto. Il tutto è contenuto nel **solo** `src/preprocessing.py`, senza duplicati. `FoldSafePreprocessor` coordina le strategie e impara le statistiche di imputazione esclusivamente dal training fold; mantiene l'interfaccia scikit-learn `fit/transform`. Non è il Factory Pattern: la factory crea oggetti, la strategia incapsula comportamenti sostituibili.
+Il Feature Engineering usa effettivamente lo **Strategy Pattern**: `FeatureTransformer` definisce l'interfaccia astratta, mentre `GroupTransformer`, `SurnameTransformer`, `CabinTransformer`, `AgeGroupTransformer` e `SpendingTransformer` implementano le singole strategie. `FeatureEngineeringPipeline` applica le strategie nell'ordine scelto. Il tutto è contenuto nel **solo** `src/preprocessing.py`, senza duplicati. `PreprocessorePasseggeri` coordina le strategie e impara le statistiche di imputazione esclusivamente dal training fold; mantiene l'interfaccia scikit-learn `fit/transform`. Non è il Factory Pattern: la factory crea oggetti, la strategia incapsula comportamenti sostituibili.
 
 L'EDA in `src/data_analysis.py` è richiamata da `main.py` **prima** della suddivisione e del preprocessing. Le statistiche di fit, invece, non vengono apprese dai fold di validazione.
 
@@ -104,3 +104,9 @@ L'EDA in `src/data_analysis.py` è richiamata da `main.py` **prima** della suddi
 ## Stato
 
 La struttura CLEAN-01 è stata integrata in `main` con test automatici superati. Le modifiche dell'audit FIA sono in un branch di revisione e richiedono ulteriori controlli e approvazione prima del merge.
+
+## Revisione finale delle feature e nomi del codice
+
+Il modulo operativo rimane **`src/preprocessing.py`**. La classe che prepara i passeggeri si chiama **`PreprocessorePasseggeri`**: implementa `fit()` e `transform()` come richiesto da scikit-learn. Il termine storico «fold-safe» descrive il comportamento corretto in validazione, **non** è più parte del nome della classe. Le trasformazioni rimangono organizzate secondo lo **Strategy Pattern** (`FeatureTransformer`, strategie concrete, `FeatureEngineeringPipeline`). I commenti e le spiegazioni nel codice sono in italiano, mentre gli identificativi delle colonne Kaggle, delle API e dei file prodotti mantengono i nomi tecnici.
+
+Lo script `python -m src.feature_ablation` valuta, sul solo sviluppo, la rimozione delle feature derivate dalle spese, delle regioni della cabina, dei conteggi di gruppo e famiglia, delle fasce d'età, nonché l'introduzione di `Spending_missing` e `Cabin_missing`. Questi ultimi indicatori sono **facoltativi e disattivati nella pipeline principale**: prima di utilizzarli occorre un confronto misurato e una decisione esplicita. Nessuna nuova Accuracy o modifica definitiva delle feature viene presunta dai soli test unitari.
