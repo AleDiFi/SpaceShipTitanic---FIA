@@ -203,10 +203,10 @@ def _build_pipeline_for_model(
     )
     pipeline = Pipeline(
         steps=[
-            ("feature_preprocessing", PreprocessorePasseggeri(
+            ("preparazione", PreprocessorePasseggeri(
                 aggiungi_indicatori_mancanti=aggiungi_indicatori_mancanti
             )),
-            ("preprocessor", encoded),
+            ("codifica", encoded),
             ("classifier", estimator),
         ]
     )
