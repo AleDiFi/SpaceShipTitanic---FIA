@@ -1,7 +1,7 @@
 """Training e selezione modello per SpaceShip Titanic.
 
 Contiene:
-- confronto modelli su holdout (model selection)
+- confronto dei modelli su holdout (funzione facoltativa)
 - confronto modelli con cross-validation
 - fine-tuning iperparametri del modello selezionato
 - fit finale del modello migliore
@@ -87,7 +87,7 @@ def build_preprocessor(
     scale_numeric: bool,
     sparse_output: bool,
 ) -> ColumnTransformer:
-    """Costruisce il preprocessor comune (OHE + opzionale scaling)."""
+    """Costruisce la codifica delle categorie e l'eventuale standardizzazione."""
     categorical_cols = list(categorical_cols)
     numeric_cols = list(numeric_cols)
 
@@ -119,7 +119,7 @@ def build_preprocessor(
 # SEZIONE: Modelli candidati e regole
 # =============================================================================
 def build_model_zoo(cfg: ModelConfig) -> dict[str, object]:
-    """Crea il dizionario nome -> estimator, rispettando i vincoli del repo."""
+    """Crea il dizionario dei modelli candidati e dei relativi classificatori."""
     zoo: dict[str, object] = {
         "logistic_regression": LogisticRegression(
             max_iter=2000,
@@ -172,7 +172,7 @@ def build_model_zoo(cfg: ModelConfig) -> dict[str, object]:
 
 
 def _model_requires_scaling(model_name: str) -> bool:
-    """Regola: alcuni modelli beneficiano molto dello scaling."""
+    """Determina quali modelli richiedono la standardizzazione."""
     return model_name in {"logistic_regression", "knn", "svc"}
 
 
@@ -188,7 +188,7 @@ def _build_pipeline_for_model(
     *,
     aggiungi_indicatori_mancanti: bool = False,
 ) -> Pipeline:
-    """Crea la pipeline (preprocessor + estimator) adatta al modello."""
+    """Crea la pipeline che comprende preparazione, codifica e classificatore."""
     # Le colonne vengono selezionate DOPO il Feature Engineering, separatamente per fold.
     scale_numeric = _model_requires_scaling(model_name)
     dense_matrix = _model_requires_dense_matrix(model_name)
@@ -219,7 +219,7 @@ def _supported_scoring_metrics() -> tuple[str, ...]:
 
 
 def _build_scoring_dict() -> dict[str, object]:
-    """Crea scorers coerenti con zero_division=0."""
+    """Crea le funzioni di valutazione evitando divisioni per zero."""
     return {
         "accuracy": make_scorer(accuracy_score),
         "precision": make_scorer(precision_score, zero_division=0),
@@ -229,7 +229,7 @@ def _build_scoring_dict() -> dict[str, object]:
 
 
 def _validate_scoring_metric(metric_name: str) -> None:
-    """Valida la metrica richiesta per sorting/refit."""
+    """Controlla la metrica richiesta per l'ordinamento e il riaddestramento."""
     supported = set(_supported_scoring_metrics())
     if metric_name not in supported:
         raise ValueError(
@@ -242,7 +242,7 @@ def _validate_scoring_metric(metric_name: str) -> None:
 # SEZIONE: Spazi di ricerca degli iperparametri
 # =============================================================================
 def build_param_distributions(model_name: str) -> dict[str, list[object]]:
-    """Restituisce gli spazi di ricerca per RandomizedSearchCV per ciascun modello."""
+    """Restituisce i possibili iperparametri esplorati per ciascun modello."""
     spaces: dict[str, dict[str, list[object]]] = {
         "logistic_regression": {
             "classifier__C": [0.01, 0.05, 0.1, 0.5, 1.0, 2.0, 5.0, 10.0],
@@ -292,11 +292,11 @@ def evaluate_models(
     y: pd.Series,
     cfg: ModelConfig | None = None,
 ) -> tuple[pd.DataFrame, str]:
-    """Confronta più modelli su uno split holdout.
+    """Confronta diversi modelli su una suddivisione di validazione.
 
-    Returns:
+    Restituisce:
         - DataFrame risultati (ordinato)
-        - nome del best model
+        - nome del modello selezionato
     """
     cfg = cfg or ModelConfig()
     print("\n" + "=" * 60)
@@ -365,7 +365,7 @@ def evaluate_models_cv(
     y: pd.Series,
     cfg: ModelConfig | None = None,
 ) -> tuple[pd.DataFrame, str]:
-    """Confronta più modelli con Stratified K-Fold cross-validation."""
+    """Confronta i modelli con cross-validation stratificata."""
     cfg = cfg or ModelConfig()
     _validate_scoring_metric(cfg.cv_selection_metric)
 
@@ -443,7 +443,7 @@ def fine_tune_model(
     model_name: str,
     cfg: ModelConfig | None = None,
 ) -> tuple[Pipeline, dict[str, object], pd.DataFrame]:
-    """Esegue RandomizedSearchCV sul modello scelto e ritorna best pipeline + report."""
+    """Cerca gli iperparametri e restituisce la pipeline migliore con il resoconto."""
     cfg = cfg or ModelConfig()
     _validate_scoring_metric(cfg.tune_refit_metric)
 
@@ -524,7 +524,7 @@ def fit_best_model(
     cfg: ModelConfig | None = None,
     best_params: dict[str, object] | None = None,
 ) -> Pipeline:
-    """Allena su tutto il train il modello selezionato come migliore."""
+    """Addestra il modello selezionato su tutti i dati di training disponibili."""
     cfg = cfg or ModelConfig()
     print("[Model] Fit finale del best model su tutto il training set...")
 
