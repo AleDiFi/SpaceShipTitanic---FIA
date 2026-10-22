@@ -185,6 +185,8 @@ def _build_pipeline_for_model(
     X: pd.DataFrame,
     model_name: str,
     estimator: object,
+    *,
+    aggiungi_indicatori_mancanti: bool = False,
 ) -> Pipeline:
     """Crea la pipeline (preprocessor + estimator) adatta al modello."""
     # Column selectors are resolved AFTER fold-safe feature engineering.
@@ -201,7 +203,9 @@ def _build_pipeline_for_model(
     )
     pipeline = Pipeline(
         steps=[
-            ("feature_preprocessing", PreprocessorePasseggeri()),
+            ("feature_preprocessing", PreprocessorePasseggeri(
+                aggiungi_indicatori_mancanti=aggiungi_indicatori_mancanti
+            )),
             ("preprocessor", encoded),
             ("classifier", estimator),
         ]
