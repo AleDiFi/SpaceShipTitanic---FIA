@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import StratifiedGroupKFold
 
-from src.preprocessing import FoldSafePreprocessor
+from src.preprocessing import PreprocessorePasseggeri
 from src.robustness_experiment import development_partition, summarize_results
 
 
@@ -31,7 +31,7 @@ def passenger_frame():
 class ExperimentRegressionTests(unittest.TestCase):
     def test_categorical_imputation_keeps_boolean_values(self):
         raw = passenger_frame()
-        preprocessor = FoldSafePreprocessor().fit(raw)
+        preprocessor = PreprocessorePasseggeri().fit(raw)
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always", FutureWarning)
             out = preprocessor.transform(raw)
@@ -48,7 +48,7 @@ class ExperimentRegressionTests(unittest.TestCase):
     def test_fractional_cabin_median_fills_nullable_integer_column(self):
         raw = passenger_frame()
         raw["Cabin"] = ["G/432/S", "G/433/P", None, None]
-        processor = FoldSafePreprocessor().fit(raw)
+        processor = PreprocessorePasseggeri().fit(raw)
         self.assertEqual(processor.cabin_median_, 432.5)
         transformed = processor.transform(raw)
         self.assertEqual(transformed["Cabin_number"].tolist(), [432.0, 433.0, 432.5, 432.5])
