@@ -1,7 +1,7 @@
-"""Feature-engineering regression tests against the ONLY production preprocessor.
+"""Test delle trasformazioni delle feature sul preprocessore effettivamente usato.
 
-Historical FE-01 and FE-02 behavior is tested via PreprocessorePasseggeri,
-not via obsolete feature-engineering and transductive preprocessing modules.
+Le funzionalità FE-01 e FE-02 vengono testate tramite PreprocessorePasseggeri,
+senza dipendere da implementazioni precedenti non più operative.
 """
 import unittest
 
