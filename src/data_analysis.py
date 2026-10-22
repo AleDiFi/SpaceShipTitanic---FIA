@@ -21,7 +21,7 @@ sns.set_theme(style="whitegrid")
 # SEZIONE: Funzioni di riepilogo
 # =============================================================================
 def print_dataset_shapes(train: pd.DataFrame, test: pd.DataFrame) -> None:
-    """Stampa la shape di train e test."""
+    """Stampa le dimensioni del training e del test."""
     print("Train set shape:", train.shape)
     print("Test set shape:", test.shape)
 
@@ -29,7 +29,7 @@ def print_dataset_shapes(train: pd.DataFrame, test: pd.DataFrame) -> None:
 def preview_head(df: pd.DataFrame, label: str, n: int = 5) -> None:
     """Stampa le prime `n` righe di un DataFrame.
 
-    Args:
+    Argomenti:
         df: DataFrame da mostrare.
         label: Etichetta descrittiva per l'output testuale.
         n: Numero di righe da stampare.
@@ -39,7 +39,7 @@ def preview_head(df: pd.DataFrame, label: str, n: int = 5) -> None:
 
 
 def report_missing_values(df: pd.DataFrame, label: str) -> None:
-    """Stampa il conteggio dei missing values per colonna."""
+    """Stampa il numero di valori mancanti per colonna."""
     print(f"\nMissing values in {label} set:\n", df.isnull().sum())
 
 
@@ -56,7 +56,7 @@ def report_cardinality(df: pd.DataFrame) -> None:
 
 
 def report_dtypes(df: pd.DataFrame) -> None:
-    """Stampa i dtype delle colonne."""
+    """Stampa i tipi di dato delle colonne."""
     print("\nFeature data types:\n", df.dtypes)
 
 
@@ -92,7 +92,7 @@ def plot_age_distribution(
     feature: str = "Age",
     target_col: str = "Transported",
 ) -> None:
-    """Mostra la distribuzione dell'età (con hue sul target se presente)."""
+    """Mostra la distribuzione dell'età, distinguendo le classi quando disponibili."""
     if feature not in train.columns:
         print(f"Colonna '{feature}' non presente nel dataset: salto l'istogramma dell'età.")
         return
@@ -119,7 +119,7 @@ def plot_expense_distributions(
     target_col: str = "Transported",
     zoom_ylim: int = 100,
 ) -> None:
-    """Mostra la distribuzione delle spese (full + zoom) per ciascuna feature."""
+    """Mostra le distribuzioni delle spese, complete e ingrandite."""
     valid_features = ["RoomService", "FoodCourt", "ShoppingMall", "Spa", "VRDeck"]
     if not valid_features:
         print("Nessuna delle feature di spesa specificate è presente nel dataset.")
@@ -157,7 +157,7 @@ def plot_categorical_features(
     features: list[str] | None = None,
     target_col: str = "Transported",
 ) -> None:
-    """Mostra countplot delle feature categoriche (con hue sul target se presente)."""
+    """Mostra la frequenza delle categorie, distinguendo le classi quando disponibili."""
     features = features or ["HomePlanet", "CryoSleep", "Destination", "VIP"]
     valid_features = [feature for feature in features if feature in train.columns]
 
@@ -189,9 +189,9 @@ def preview_qualitative_features(
     features: list[str] | None = None,
     n: int = 5,
 ) -> None:
-    """Stampa una preview delle feature qualitative selezionate.
+    """Mostra un'anteprima delle feature qualitative selezionate.
 
-    Args:
+    Argomenti:
         train: DataFrame del training set.
         features: Lista di colonne da mostrare (se None usa i default).
         n: Numero di righe da stampare.
@@ -213,7 +213,7 @@ def preview_qualitative_features(
 def run_full_analysis(train: pd.DataFrame, test: pd.DataFrame) -> None:
     """Esegue in sequenza tutte le fasi dell'EDA e organizza le visualizzazioni.
 
-    Args:
+    Argomenti:
         train: DataFrame del training set.
         test: DataFrame del test set.
     """
