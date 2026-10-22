@@ -84,6 +84,24 @@ class GroupFamilyTests(unittest.TestCase):
         self.assertEqual(result.loc[2, "Family_size"], 0)
 
 
+class MissingIndicatorTests(unittest.TestCase):
+    def test_indicatori_disattivati_non_cambiano_le_colonne(self):
+        raw = passengers(["0001_01", "0002_01"])
+        risultato = PreprocessorePasseggeri().fit_transform(raw)
+        self.assertNotIn("Spending_missing", risultato.columns)
+        self.assertNotIn("Cabin_missing", risultato.columns)
+
+    def test_indicatori_registrano_i_mancanti_originali(self):
+        raw = passengers(["0001_01", "0002_01"])
+        raw.loc[0, "FoodCourt"] = np.nan
+        raw.loc[1, "Cabin"] = None
+        risultato = PreprocessorePasseggeri(
+            aggiungi_indicatori_mancanti=True
+        ).fit_transform(raw)
+        self.assertEqual(risultato["Spending_missing"].tolist(), [1, 0])
+        self.assertEqual(risultato["Cabin_missing"].tolist(), [0, 1])
+
+
 class SpendingTests(unittest.TestCase):
     def test_known_zero_expenses_identify_no_spending(self):
         raw = passengers(["0001_01"])
