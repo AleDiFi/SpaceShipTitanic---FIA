@@ -23,7 +23,7 @@ from src.model import ModelConfig, _build_pipeline_for_model, build_model_zoo
 SEEDS = (42, 123, 2026)
 FOLDS = 5
 
-# Fixed from EXP-01; do not select again using the holdout.
+# Parametri fissati in EXP-01: non riselezionarli usando l'holdout.
 FIXED_PARAMS = {
     "xgboost": {
         "subsample": 0.8, "reg_lambda": 1.0, "n_estimators": 700,
@@ -67,7 +67,7 @@ def evaluate_robustness(X: pd.DataFrame, y: pd.Series, seeds=SEEDS, folds=FOLDS)
                 )
                 splits = splitter.split(X, y, groups=groups)
             for fold, (train_idx, valid_idx) in enumerate(splits, start=1):
-                # Explicitly check group separation in group-aware validation.
+                # Verifica esplicita della separazione dei gruppi nella validazione per gruppi.
                 overlap = set(groups.iloc[train_idx]) & set(groups.iloc[valid_idx])
                 if scheme == "stratified_group" and overlap:
                     raise AssertionError("Travel group leaked into group-aware validation")
