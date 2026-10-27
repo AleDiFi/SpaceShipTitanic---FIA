@@ -1,7 +1,7 @@
 """Training e selezione modello per SpaceShip Titanic.
 
 Contiene:
-- confronto modelli su holdout (model selection)
+- confronto dei modelli su holdout (funzione facoltativa)
 - confronto modelli con cross-validation
 - fine-tuning iperparametri del modello selezionato
 - fit finale del modello migliore
@@ -26,7 +26,7 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.svm import SVC
-from src.preprocessing import FoldSafePreprocessor
+from src.preprocessing import PreprocessorePasseggeri
 
 
 @dataclass(frozen=True)
@@ -56,7 +56,7 @@ class ModelConfig:
 
 
 # =============================================================================
-# SECTION: Helpers (Target + Feature Types)
+# SEZIONE: Funzioni di supporto (target e tipi di feature)
 # =============================================================================
 def _ensure_numeric_target(y: pd.Series) -> pd.Series:
     """Converte il target a 0/1 in modo robusto."""
@@ -78,7 +78,7 @@ def _split_feature_types(df: pd.DataFrame) -> tuple[list[str], list[str]]:
 
 
 # =============================================================================
-# SECTION: Preprocessor
+# SEZIONE: Preparazione delle caratteristiche
 # =============================================================================
 def build_preprocessor(
     categorical_cols: Iterable[str],
@@ -87,7 +87,7 @@ def build_preprocessor(
     scale_numeric: bool,
     sparse_output: bool,
 ) -> ColumnTransformer:
-    """Costruisce il preprocessor comune (OHE + opzionale scaling)."""
+    """Costruisce la codifica delle categorie e l'eventuale standardizzazione."""
     categorical_cols = list(categorical_cols)
     numeric_cols = list(numeric_cols)
 
@@ -116,14 +116,13 @@ def build_preprocessor(
 
 
 # =============================================================================
-# SECTION: Model Zoo + Rules
+# SEZIONE: Modelli candidati e regole
 # =============================================================================
 def build_model_zoo(cfg: ModelConfig) -> dict[str, object]:
-    """Crea il dizionario nome -> estimator, rispettando i vincoli del repo."""
+    """Crea il dizionario dei modelli candidati e dei relativi classificatori."""
     zoo: dict[str, object] = {
         "logistic_regression": LogisticRegression(
             max_iter=2000,
-            n_jobs=cfg.n_jobs,
             solver="lbfgs",
         ),
         "knn": KNeighborsClassifier(n_neighbors=15, weights="distance"),
@@ -173,7 +172,7 @@ def build_model_zoo(cfg: ModelConfig) -> dict[str, object]:
 
 
 def _model_requires_scaling(model_name: str) -> bool:
-    """Regola: alcuni modelli beneficiano molto dello scaling."""
+    """Determina quali modelli richiedono la standardizzazione."""
     return model_name in {"logistic_regression", "knn", "svc"}
 
 
@@ -186,9 +185,11 @@ def _build_pipeline_for_model(
     X: pd.DataFrame,
     model_name: str,
     estimator: object,
+    *,
+    aggiungi_indicatori_mancanti: bool = False,
 ) -> Pipeline:
-    """Crea la pipeline (preprocessor + estimator) adatta al modello."""
-    # Column selectors are resolved AFTER fold-safe feature engineering.
+    """Crea la pipeline che comprende preparazione, codifica e classificatore."""
+    # Le colonne vengono selezionate DOPO il Feature Engineering, separatamente per fold.
     scale_numeric = _model_requires_scaling(model_name)
     dense_matrix = _model_requires_dense_matrix(model_name)
     cat = OneHotEncoder(handle_unknown="ignore", sparse_output=not dense_matrix)
@@ -202,8 +203,10 @@ def _build_pipeline_for_model(
     )
     pipeline = Pipeline(
         steps=[
-            ("feature_preprocessing", FoldSafePreprocessor()),
-            ("preprocessor", encoded),
+            ("preparazione", PreprocessorePasseggeri(
+                aggiungi_indicatori_mancanti=aggiungi_indicatori_mancanti
+            )),
+            ("codifica", encoded),
             ("classifier", estimator),
         ]
     )
@@ -216,7 +219,7 @@ def _supported_scoring_metrics() -> tuple[str, ...]:
 
 
 def _build_scoring_dict() -> dict[str, object]:
-    """Crea scorers coerenti con zero_division=0."""
+    """Crea le funzioni di valutazione evitando divisioni per zero."""
     return {
         "accuracy": make_scorer(accuracy_score),
         "precision": make_scorer(precision_score, zero_division=0),
@@ -226,7 +229,7 @@ def _build_scoring_dict() -> dict[str, object]:
 
 
 def _validate_scoring_metric(metric_name: str) -> None:
-    """Valida la metrica richiesta per sorting/refit."""
+    """Controlla la metrica richiesta per l'ordinamento e il riaddestramento."""
     supported = set(_supported_scoring_metrics())
     if metric_name not in supported:
         raise ValueError(
@@ -236,10 +239,10 @@ def _validate_scoring_metric(metric_name: str) -> None:
 
 
 # =============================================================================
-# SECTION: Hyperparameter Search Spaces
+# SEZIONE: Spazi di ricerca degli iperparametri
 # =============================================================================
 def build_param_distributions(model_name: str) -> dict[str, list[object]]:
-    """Restituisce gli spazi di ricerca per RandomizedSearchCV per ciascun modello."""
+    """Restituisce i possibili iperparametri esplorati per ciascun modello."""
     spaces: dict[str, dict[str, list[object]]] = {
         "logistic_regression": {
             "classifier__C": [0.01, 0.05, 0.1, 0.5, 1.0, 2.0, 5.0, 10.0],
@@ -282,22 +285,22 @@ def build_param_distributions(model_name: str) -> dict[str, list[object]]:
 
 
 # =============================================================================
-# SECTION: Model Evaluation
+# SEZIONE: Valutazione dei modelli
 # =============================================================================
 def evaluate_models(
     X: pd.DataFrame,
     y: pd.Series,
     cfg: ModelConfig | None = None,
 ) -> tuple[pd.DataFrame, str]:
-    """Confronta più modelli su uno split holdout.
+    """Confronta diversi modelli su una suddivisione di validazione.
 
-    Returns:
+    Restituisce:
         - DataFrame risultati (ordinato)
-        - nome del best model
+        - nome del modello selezionato
     """
     cfg = cfg or ModelConfig()
     print("\n" + "=" * 60)
-    print("SPACESHIP TITANIC - Model Selection (holdout)")
+    print("SPACESHIP TITANIC - Selezione dei modelli (holdout)")
     print("=" * 60)
 
     y_num = _ensure_numeric_target(y)
@@ -317,7 +320,7 @@ def evaluate_models(
 
     for model_name, estimator in zoo.items():
         print("-" * 60)
-        print(f"[Model] Training: {model_name}")
+        print(f"[Modelli] Addestramento: {model_name}")
 
         pipeline = _build_pipeline_for_model(X_train, model_name, estimator)
         pipeline.fit(X_train, y_train)
@@ -348,26 +351,26 @@ def evaluate_models(
     print("-" * 60)
     print("[Model] Classifica modelli (top 5):")
     print(results_df.head(5).to_string(index=False))
-    print(f"[Model] Best model selezionato: {best_model_name}")
+    print(f"[Modelli] Modello selezionato: {best_model_name}")
     print("=" * 60 + "\n")
 
     return results_df, best_model_name
 
 
 # =============================================================================
-# SECTION: Model Evaluation (Cross Validation)
+# SEZIONE: Valutazione dei modelli con cross-validation
 # =============================================================================
 def evaluate_models_cv(
     X: pd.DataFrame,
     y: pd.Series,
     cfg: ModelConfig | None = None,
 ) -> tuple[pd.DataFrame, str]:
-    """Confronta più modelli con Stratified K-Fold cross-validation."""
+    """Confronta i modelli con cross-validation stratificata."""
     cfg = cfg or ModelConfig()
     _validate_scoring_metric(cfg.cv_selection_metric)
 
     print("\n" + "=" * 60)
-    print(f"SPACESHIP TITANIC - Model Selection (CV {cfg.cv_folds}-fold)")
+    print(f"SPACESHIP TITANIC - Selezione dei modelli (CV {cfg.cv_folds}-fold)")
     print("=" * 60)
 
     y_num = _ensure_numeric_target(y)
@@ -387,7 +390,7 @@ def evaluate_models_cv(
 
     for model_name, estimator in zoo.items():
         print("-" * 60)
-        print(f"[Model][CV] Training+Validation: {model_name}")
+        print(f"[Model][CV] Addestramento e validazione: {model_name}")
 
         pipeline = _build_pipeline_for_model(X, model_name, estimator)
         cv_scores = cross_validate(
@@ -425,14 +428,14 @@ def evaluate_models_cv(
     print("-" * 60)
     print("[Model][CV] Classifica modelli (top 5):")
     print(results_df.head(5).to_string(index=False))
-    print(f"[Model][CV] Best model selezionato ({cfg.cv_selection_metric}): {best_model_name}")
+    print(f"[Model][CV] Modello selezionato ({cfg.cv_selection_metric}): {best_model_name}")
     print("=" * 60 + "\n")
 
     return results_df, best_model_name
 
 
 # =============================================================================
-# SECTION: Hyperparameter Tuning
+# SEZIONE: Ricerca degli iperparametri
 # =============================================================================
 def fine_tune_model(
     X: pd.DataFrame,
@@ -440,7 +443,7 @@ def fine_tune_model(
     model_name: str,
     cfg: ModelConfig | None = None,
 ) -> tuple[Pipeline, dict[str, object], pd.DataFrame]:
-    """Esegue RandomizedSearchCV sul modello scelto e ritorna best pipeline + report."""
+    """Cerca gli iperparametri e restituisce la pipeline migliore con il resoconto."""
     cfg = cfg or ModelConfig()
     _validate_scoring_metric(cfg.tune_refit_metric)
 
@@ -492,15 +495,15 @@ def fine_tune_model(
         .reset_index(drop=True)
     )
 
-    print(f"[Model][Tune] Best {cfg.tune_refit_metric}: {best_score:.4f}")
-    print(f"[Model][Tune] Best params: {best_params}")
+    print(f"[Model][Tune] Migliore {cfg.tune_refit_metric}: {best_score:.4f}")
+    print(f"[Model][Tune] Iperparametri selezionati: {best_params}")
     print("=" * 60 + "\n")
 
     return best_pipeline, best_params, tuning_results_df
 
 
 # =============================================================================
-# SECTION: Persistence
+# SEZIONE: Salvataggio dei risultati
 # =============================================================================
 def save_model_results(results_df: pd.DataFrame, output_path: Path) -> Path:
     """Salva la classifica dei modelli in CSV."""
@@ -512,7 +515,7 @@ def save_model_results(results_df: pd.DataFrame, output_path: Path) -> Path:
 
 
 # =============================================================================
-# SECTION: Final Fit
+# SEZIONE: Addestramento finale
 # =============================================================================
 def fit_best_model(
     X: pd.DataFrame,
@@ -521,9 +524,9 @@ def fit_best_model(
     cfg: ModelConfig | None = None,
     best_params: dict[str, object] | None = None,
 ) -> Pipeline:
-    """Allena su tutto il train il modello selezionato come migliore."""
+    """Addestra il modello selezionato su tutti i dati di training disponibili."""
     cfg = cfg or ModelConfig()
-    print("[Model] Fit finale del best model su tutto il training set...")
+    print("[Model] Addestramento finale del modello selezionato su tutto il training set...")
 
     y_num = _ensure_numeric_target(y)
     zoo = build_model_zoo(cfg)

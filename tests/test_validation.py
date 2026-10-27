@@ -1,11 +1,11 @@
-"""VAL-01 tests: unseen validation rows cannot change fitted preprocessing."""
+"""Test VAL-01: i dati di validazione non modificano le statistiche apprese."""
 import unittest
 
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import StratifiedKFold, cross_validate
 
-from src.preprocessing import FoldSafePreprocessor
+from src.preprocessing import PreprocessorePasseggeri
 from src.model import ModelConfig, _build_pipeline_for_model, build_model_zoo
 
 
@@ -30,11 +30,11 @@ def passengers(n=12):
     return pd.DataFrame(rows)
 
 
-class FoldSafeTests(unittest.TestCase):
+class PreprocessingTests(unittest.TestCase):
     def test_holdout_age_cannot_change_fitted_training_median(self):
         train = passengers(6)
         train.loc[0, "Age"] = np.nan
-        a = FoldSafePreprocessor().fit(train)
+        a = PreprocessorePasseggeri().fit(train)
         validation = passengers(2)
         validation["Age"] = [np.nan, 100000.0]
         transformed = a.transform(validation)
@@ -45,7 +45,7 @@ class FoldSafeTests(unittest.TestCase):
         train = passengers(3)
         validation = passengers(2)
         validation["PassengerId"] = ["9999_01", "9999_02"]
-        output = FoldSafePreprocessor().fit(train).transform(validation)
+        output = PreprocessorePasseggeri().fit(train).transform(validation)
         self.assertEqual(output["Group_size"].tolist(), [1, 1])
         self.assertEqual(output["Solo"].tolist(), [1, 1])
 
@@ -55,7 +55,7 @@ class FoldSafeTests(unittest.TestCase):
         validation = passengers(2)
         validation["RoomService"] = [np.nan, 999999.]
         validation["HomePlanet"] = "Mars"  # no matching training subgroup
-        prep = FoldSafePreprocessor().fit(train)
+        prep = PreprocessorePasseggeri().fit(train)
         out = prep.transform(validation)
         self.assertEqual(prep.spending_medians_["RoomService"], 25.)
         self.assertEqual(out.loc[0, "RoomService"], 25.)

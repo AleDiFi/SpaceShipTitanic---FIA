@@ -1,10 +1,10 @@
-"""EXP-02: compare fixed XGBoost and SVC candidates on development data only.
+"""EXP-02: confronto fra XGBoost e SVC sul solo set di sviluppo.
 
-These hyperparameters are from the completed VAL-01 development CV search.
-We do NOT re-tune against the holdout, and do NOT use holdout labels here.
-Results are descriptive sensitivity analyses, not a new unbiased test score.
+Gli iperparametri sono stati fissati nella precedente ricerca con cross-validation.
+L'holdout non viene utilizzato per selezionare parametri né per effettuare stime.
+I risultati descrivono la robustezza, non costituiscono un nuovo test indipendente.
 
-Run: python -m src.robustness_experiment
+Esecuzione: python -m src.robustness_experiment
 """
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ from src.model import ModelConfig, _build_pipeline_for_model, build_model_zoo
 SEEDS = (42, 123, 2026)
 FOLDS = 5
 
-# Fixed from EXP-01; do not select again using the holdout.
+# Parametri fissati in EXP-01: non riselezionarli usando l'holdout.
 FIXED_PARAMS = {
     "xgboost": {
         "subsample": 0.8, "reg_lambda": 1.0, "n_estimators": 700,
@@ -35,7 +35,7 @@ FIXED_PARAMS = {
 
 
 def development_partition(data: pd.DataFrame):
-    """Reproduce main.py's original 80/20 stratified raw-data split."""
+    """Riproduce la suddivisione stratificata 80/20 dei dati originali."""
     X = data.drop(columns=["Transported"])
     y = data["Transported"].astype(int)
     X_dev, _, y_dev, _ = train_test_split(
@@ -45,7 +45,7 @@ def development_partition(data: pd.DataFrame):
 
 
 def evaluate_robustness(X: pd.DataFrame, y: pd.Series, seeds=SEEDS, folds=FOLDS):
-    """Return per-fold results. Every fold refits all learned preprocessing."""
+    """Restituisce i risultati per fold; ogni fold riapprende il preprocessing."""
     cfg = ModelConfig(model_names=("xgboost", "svc"), n_jobs=1)
     models = build_model_zoo(cfg)
     missing = set(FIXED_PARAMS) - set(models)
@@ -67,7 +67,7 @@ def evaluate_robustness(X: pd.DataFrame, y: pd.Series, seeds=SEEDS, folds=FOLDS)
                 )
                 splits = splitter.split(X, y, groups=groups)
             for fold, (train_idx, valid_idx) in enumerate(splits, start=1):
-                # Explicitly check group separation in group-aware validation.
+                # Verifica esplicita della separazione dei gruppi nella validazione per gruppi.
                 overlap = set(groups.iloc[train_idx]) & set(groups.iloc[valid_idx])
                 if scheme == "stratified_group" and overlap:
                     raise AssertionError("Travel group leaked into group-aware validation")
@@ -91,7 +91,7 @@ def evaluate_robustness(X: pd.DataFrame, y: pd.Series, seeds=SEEDS, folds=FOLDS)
 
 
 def summarize_results(results: pd.DataFrame):
-    """Mean and std across the evaluated folds; scores are correlated."""
+    """Calcola media e deviazione standard descrittive di fold correlati."""
     return (
         results.groupby(["scheme", "model"], as_index=False)
         .agg(
@@ -117,7 +117,7 @@ def main():
     results.to_csv(output_dir / "exp02_fold_results.csv", index=False)
     summary.to_csv(output_dir / "exp02_summary.csv", index=False)
     print(summary.to_string(index=False))
-    print("\nSaved EXP-02 results in outputs/. Original holdout is untouched.")
+    print("\nRisultati EXP-02 salvati in outputs/. L'holdout non è stato utilizzato.")
 
 
 if __name__ == "__main__":

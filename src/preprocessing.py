@@ -1,9 +1,9 @@
-"""Canonical feature engineering and fold-safe preprocessing for Spaceship Titanic.
+"""Preparazione delle caratteristiche dei passeggeri di Spaceship Titanic.
 
-All learned distributions are fit ONLY on the samples passed to fit().
-transform() never learns statistics from the validation or Kaggle test rows.
-Group and surname frequencies describe the fitted cohort; unseen groups
-receive a conservative size of one, not a peek at validation passengers.
+Le statistiche vengono apprese esclusivamente dalle righe fornite a fit().
+transform() applica le statistiche già apprese, senza usare le righe di validazione
+o del test Kaggle per modificare l'imputazione o le frequenze.
+Lo Strategy Pattern organizza le trasformazioni in classi intercambiabili.
 """
 from __future__ import annotations
 
@@ -38,11 +38,11 @@ def _age_groups(age: pd.Series) -> pd.Series:
 
 
 class FeatureTransformer(ABC):
-    """Strategy: one clearly identified feature transformation."""
+    """Interfaccia astratta per una strategia di trasformazione delle caratteristiche."""
 
     @abstractmethod
     def transform(self, frame: pd.DataFrame) -> pd.DataFrame:
-        """Return data with new features; never learn validation statistics."""
+        """Restituisce i dati trasformati senza apprendere statistiche di validazione."""
 
 
 class GroupTransformer(FeatureTransformer):
@@ -75,6 +75,34 @@ class CabinTransformer(FeatureTransformer):
         return frame
 
 
+class RelazioniTransformer(FeatureTransformer):
+    """Strategia con apprendimento dei conteggi di gruppi e cognomi.
+
+    fit() utilizza solo le righe del training; transform() applica le frequenze
+    già apprese e tratta i gruppi sconosciuti come gruppi di una sola persona.
+    """
+
+    def fit(self, frame):
+        self.group_counts_ = frame["Group"].value_counts().to_dict()
+        noti = frame.dropna(subset=["Surname"])
+        distinti = noti.groupby("Group")["Surname"].nunique()
+        compatibili = noti[noti["Group"].isin(distinti[distinti == 1].index)]
+        self.group_surname_ = compatibili.groupby("Group")["Surname"].first().to_dict()
+        cognomi = frame["Surname"].fillna(frame["Group"].map(self.group_surname_))
+        self.surname_counts_ = cognomi.value_counts().to_dict()
+        return self
+
+    def transform(self, frame):
+        frame = frame.copy()
+        frame["Surname"] = frame["Surname"].fillna(
+            frame["Group"].map(self.group_surname_)
+        ).fillna("Unknown").astype(object)
+        frame["Group_size"] = frame["Group"].map(self.group_counts_).fillna(1).astype(int)
+        frame["Solo"] = (frame["Group_size"] == 1).astype(int)
+        frame["Family_size"] = frame["Surname"].map(self.surname_counts_).fillna(0).astype(int)
+        return frame
+
+
 class AgeGroupTransformer(FeatureTransformer):
     def transform(self, frame):
         frame["Age_group"] = _age_groups(frame["Age"])
@@ -82,7 +110,7 @@ class AgeGroupTransformer(FeatureTransformer):
 
 
 class SpendingTransformer(FeatureTransformer):
-    """Derive features only after expenses have been imputed."""
+    """Crea le variabili di spesa dopo aver completato le imputazioni."""
     def transform(self, frame):
         frame["Expenditure"] = frame[list(EXPENSE_COLUMNS)].sum(axis=1)
         frame["No_spending"] = frame[list(EXPENSE_COLUMNS)].eq(0).all(axis=1).astype(int)
@@ -90,7 +118,7 @@ class SpendingTransformer(FeatureTransformer):
 
 
 class FeatureEngineeringPipeline:
-    """Apply the supplied feature strategies in a clear, explicit order."""
+    """Applica le strategie di trasformazione nell’ordine specificato."""
 
     def __init__(self, transformers):
         self.transformers = list(transformers)
@@ -101,12 +129,16 @@ class FeatureEngineeringPipeline:
         return frame
 
 
-class FoldSafePreprocessor(BaseEstimator, TransformerMixin):
-    """Learn train-fold-only statistics, and apply them to unseen passengers."""
+class PreprocessorePasseggeri(BaseEstimator, TransformerMixin):
+    """Apprende sul training e trasforma passeggeri nuovi con statistiche fisse."""
+
+    def __init__(self, aggiungi_indicatori_mancanti=False):
+        # Opzione sperimentale: non modifica il modello esistente finché è False.
+        self.aggiungi_indicatori_mancanti = aggiungi_indicatori_mancanti
 
     def _extract(self, X):
         frame = X.copy().reset_index(drop=True)
-        # Structural feature strategies do not compute learned statistics.
+        # Le strategie strutturali non stimano statistiche dal campione.
         frame = FeatureEngineeringPipeline([
             GroupTransformer(), SurnameTransformer(), CabinTransformer(),
         ]).transform(frame)
@@ -114,13 +146,11 @@ class FoldSafePreprocessor(BaseEstimator, TransformerMixin):
 
     def fit(self, X, y=None):
         source = self._extract(X)
-        self.group_counts_ = source["Group"].value_counts().to_dict()
-        known = source.dropna(subset=["Surname"])
-        unique = known.groupby("Group")["Surname"].nunique()
-        compatible = known[known["Group"].isin(unique[unique == 1].index)]
-        self.group_surname_ = compatible.groupby("Group")["Surname"].first().to_dict()
-        source["Surname"] = source["Surname"].fillna(source["Group"].map(self.group_surname_))
-        self.surname_counts_ = source["Surname"].value_counts().to_dict()
+        # Le frequenze dei gruppi sono apprese mediante una strategia dedicata.
+        self.relazioni_ = RelazioniTransformer().fit(source)
+        self.group_counts_ = self.relazioni_.group_counts_
+        self.group_surname_ = self.relazioni_.group_surname_
+        self.surname_counts_ = self.relazioni_.surname_counts_
         known_planets = source.dropna(subset=["HomePlanet"])
         self.group_planet_ = known_planets.groupby("Group")["HomePlanet"].agg(
             lambda s: _mode(s, "Earth")
@@ -149,11 +179,7 @@ class FoldSafePreprocessor(BaseEstimator, TransformerMixin):
 
     def _fill_basic(self, frame):
         frame = frame.copy()
-        frame["Surname"] = frame["Surname"].fillna(frame["Group"].map(self.group_surname_))
-        frame["Surname"] = frame["Surname"].fillna("Unknown").astype(object)
-        frame["Group_size"] = frame["Group"].map(self.group_counts_).fillna(1).astype(int)
-        frame["Solo"] = (frame["Group_size"] == 1).astype(int)
-        frame["Family_size"] = frame["Surname"].map(self.surname_counts_).fillna(0).astype(int)
+        frame = self.relazioni_.transform(frame)
 
         planet = frame["HomePlanet"].fillna(frame["Group"].map(self.group_planet_))
         planet = planet.mask(planet.isna() & frame["Cabin_deck"].isin(["A", "B", "C", "T"]), "Europa")
@@ -161,8 +187,7 @@ class FoldSafePreprocessor(BaseEstimator, TransformerMixin):
         frame["HomePlanet"] = planet.fillna(self.category_modes_["HomePlanet"]).astype(object)
 
         for col in ("Destination", "CryoSleep", "VIP", "Cabin_deck", "Cabin_side"):
-            # Resolve missing categories explicitly: pandas fillna on an object
-            # series can silently downcast booleans and emit FutureWarning.
+            # Imputazione esplicita: evita conversioni implicite dei booleani in Pandas.
             fallback = self.category_modes_[col]
             frame[col] = frame[col].map(
                 lambda value: value if pd.notna(value) else fallback
@@ -173,10 +198,15 @@ class FoldSafePreprocessor(BaseEstimator, TransformerMixin):
 
     def transform(self, X):
         check_is_fitted(self, ["group_counts_", "spending_medians_", "cabin_median_"])
-        frame = self._fill_basic(self._extract(X))
+        frame = self._extract(X)
+        if self.aggiungi_indicatori_mancanti:
+            # Indicatori calcolati prima di qualsiasi imputazione.
+            frame["Spending_missing"] = frame[list(EXPENSE_COLUMNS)].isna().any(axis=1).astype(int)
+            frame["Cabin_missing"] = frame["Cabin_number"].isna().astype(int)
+        frame = self._fill_basic(frame)
         for col in EXPENSE_COLUMNS:
-            # A passenger in cryosleep cannot incur onboard service charges:
-            # an explicit domain assumption, not an inferred validation statistic.
+            # Ipotesi di dominio: durante il criosonno non si sostengono spese
+            # per i servizi di bordo. Non è una statistica stimata dal validation set.
             frame.loc[frame["CryoSleep"].eq(True) & frame[col].isna(), col] = 0
             grouped = self.spending_by_group_[col]
             keys = list(zip(frame["Age_group"], frame["HomePlanet"], frame["VIP"]))
