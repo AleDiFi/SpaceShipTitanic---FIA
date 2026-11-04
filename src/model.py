@@ -181,6 +181,14 @@ def _model_requires_dense_matrix(model_name: str) -> bool:
     return model_name in {"gaussian_nb"}
 
 
+# GUIDA PIPELINE 2/5 - Ordine di esecuzione degli step
+# degli step. Pipeline.fit(X, y) esegue in automatico:
+#   preparazione.fit(X, y) + preparazione.transform(X)
+#   codifica.fit_transform(X_preparato)
+#   classifier.fit(X_codificato, y)
+# Pipeline.predict(X_nuovo) esegue invece:
+#   preparazione.transform -> codifica.transform -> classifier.predict.
+# Non c'e' un secondo training durante la validazione o l'holdout.
 def _build_pipeline_for_model(
     X: pd.DataFrame,
     model_name: str,
@@ -481,6 +489,12 @@ def fine_tune_model(
         return_train_score=False,
         error_score="raise",
     )
+    # GUIDA PIPELINE 3/5 - Questa singola chiamata avvia tutto il tuning:
+    # per OGNI configurazione campionata, CV suddivide i dati in cinque fold;
+    # su quattro chiama Pipeline.fit (preparazione, codifica, classificatore);
+    # sul quinto chiama Pipeline.predict e calcola le metriche.
+    # Terminati i fold, refit='accuracy' riaddestra automaticamente
+    # la configurazione migliore su TUTTO X (qui: il development set).
     search.fit(X, y_num)
 
     best_pipeline: Pipeline = search.best_estimator_
@@ -542,6 +556,9 @@ def fit_best_model(
         estimator.set_params(**cleaned_params)
 
     pipeline = _build_pipeline_for_model(X, best_model_name, estimator)
+    # GUIDA PIPELINE - fit finale esplicito: scatena in automatico
+    # il fit/transform di preprocessing, la codifica e il fit del modello.
+    # E' richiamato sia per X_dev (holdout) sia per X completo (Kaggle).
     pipeline.fit(X, y_num)
     print(f"[Model] Fit completato: {best_model_name}")
     return pipeline
