@@ -22,6 +22,7 @@ from src.predict import build_submission, predict_test, save_submission
 # =============================================================================
 # SEZIONE: Caricamento dati
 # =============================================================================
+
 def load_datasets(
     train_path: Path | None = None,
     test_path: Path | None = None,
@@ -64,6 +65,7 @@ def load_datasets(
 # =============================================================================
 # SEZIONE: Pipeline principale
 # =============================================================================
+
 def main() -> None:
     """Esegue l'intera pipeline: EDA -> FE -> Preprocessing -> Model -> Submission."""
     print("=" * 60)
@@ -71,18 +73,24 @@ def main() -> None:
     print("=" * 60)
 
     # 1) Caricamento dei dati originali
+
     print("\n[FASE 1] Caricamento dei dati originali...")
     train, test = load_datasets()
 
     # VAL-01: suddivisione delle righe originali prima dell'EDA supervisionata e del preprocessing.
     # I dati di test Kaggle non intervengono nell'apprendimento delle statistiche dei fold.
+
     X = train.drop(columns=["Transported"])
     y = train["Transported"].astype(int)
+    # Split stratificato 80/20: conserva circa la proporzione delle classi.
+    # L'holdout resta escluso dalla ricerca e dalla selezione del modello.
+
     X_dev, X_holdout, y_dev, y_holdout = train_test_split(
         X, y, test_size=0.20, random_state=42, stratify=y,
     )
     # L'EDA può analizzare il target soltanto sul set di sviluppo.
     # Il test Kaggle è privo di etichette; l'EDA non osserva il target dell'holdout.
+
     print("\n[FASE 2] Analisi esplorativa del solo set di sviluppo...")
     eda_development = X_dev.copy()
     eda_development["Transported"] = y_dev
@@ -111,6 +119,7 @@ def main() -> None:
     # Segui fine_tune_model() in src/model.py: crea la Pipeline e avvia
     # RandomizedSearchCV.fit(). I fit/transform dei singoli fold sono
     # gestiti automaticamente da scikit-learn, non da questo ciclo.
+
     for model_name in available_models:
         print(f"\n[INFO] Tuning modello: {model_name}")
         _, model_best_params, tuning_df = fine_tune_model(
@@ -140,6 +149,9 @@ def main() -> None:
             best_model_name = model_name
             best_params = model_best_params
 
+    # Confronto finale: per ogni classificatore si prende la migliore
+    # Accuracy media in CV, non l'Accuracy ottenuta sull'holdout.
+
     results_df = (
         pd.DataFrame(tuning_summary)
         .sort_values(f"{cfg.tune_refit_metric}_cv", ascending=False)
@@ -152,15 +164,21 @@ def main() -> None:
     save_model_results(results_df, outputs_dir / "model_results.csv")
 
     # L'holdout non viene utilizzato per ricerca o selezione del modello.
+
     print("[FASE 4] Valutazione indipendente del modello selezionato.")
     # GUIDA PIPELINE 4/5 - Dopo la selezione via CV, fit_best_model()
     # ricostruisce e addestra l'intera Pipeline SOLO sull'80% X_dev.
     # La predict seguente sull'holdout richiama i transform gia' appresi
     # (senza fit) e infine il predict del classificatore.
+
     holdout_model = fit_best_model(
         X_dev, y_dev, best_model_name=best_model_name, cfg=cfg, best_params=best_params,
     )
     holdout_preds = holdout_model.predict(X_holdout)
+    # Accuracy: corrette/totale. Precision: TP/(TP+FP).
+    # Recall: TP/(TP+FN). F1: media armonica di Precision e Recall.
+    # Queste metriche valutano le predizioni senza riaddestrare il modello.
+
     holdout_results = pd.DataFrame([{
         "model": best_model_name,
         "accuracy": accuracy_score(y_holdout, holdout_preds),
@@ -170,6 +188,8 @@ def main() -> None:
     }])
     save_model_results(holdout_results, outputs_dir / "holdout_results.csv")
     # Riepilogo descrittivo degli errori: non usarlo per modificare il modello.
+    # La matrice 2x2 distingue TN, FP, FN e TP per le classi 0 e 1.
+
     matrix = confusion_matrix(y_holdout, holdout_preds, labels=[0, 1])
     matrix_df = pd.DataFrame(matrix, index=["Actual_False", "Actual_True"],
                              columns=["Pred_False", "Pred_True"])
@@ -181,6 +201,7 @@ def main() -> None:
     # GUIDA PIPELINE 5/5 - Per Kaggle rifacciamo il fit su TUTTI i dati
     # etichettati: anche mediane, encoder e scaler vengono riappresi.
     # Il test privo di target passa soltanto da transform + predict.
+
     final_model = fit_best_model(
         X, y, best_model_name=best_model_name, cfg=cfg, best_params=best_params,
     )
@@ -189,6 +210,7 @@ def main() -> None:
     save_submission(submission, outputs_dir / "submission.csv")
 
     # Salvataggio delle caratteristiche prodotte dal preprocessing finale.
+
     processed_dir = base_dir / "data" / "processed"
     processed_dir.mkdir(parents=True, exist_ok=True)
     feature_step = final_model.named_steps["preparazione"]
