@@ -37,6 +37,10 @@ def _age_groups(age: pd.Series) -> pd.Series:
 
 
 
+# GUIDA PIPELINE - Strategy Pattern: ciascuna strategia incapsula una
+# trasformazione di feature; le strategie deterministiche implementano
+# transform(), mentre RelazioniTransformer implementa anche fit() per
+# apprendere conteggi solo dai dati del training del fold.
 class FeatureTransformer(ABC):
     """Interfaccia astratta per una strategia di trasformazione delle caratteristiche."""
 
@@ -129,6 +133,10 @@ class FeatureEngineeringPipeline:
         return frame
 
 
+# GUIDA PIPELINE - Primo step della Pipeline di src/model.py.
+# scikit-learn richiama fit() e transform() quando si usa Pipeline.fit;
+# durante Pipeline.predict sul fold di validazione/holdout/test chiama
+# solo transform(), riutilizzando le statistiche gia' apprese.
 class PreprocessorePasseggeri(BaseEstimator, TransformerMixin):
     """Apprende sul training e trasforma passeggeri nuovi con statistiche fisse."""
 
@@ -144,6 +152,9 @@ class PreprocessorePasseggeri(BaseEstimator, TransformerMixin):
         ]).transform(frame)
         return frame.drop(columns=["PassengerId", "Name", "Cabin"])
 
+    # FIT: apprende da X esclusivamente le statistiche del training fold
+    # (frequenze gruppi/cognomi, mode categoriche, mediane eta', spese,
+    # cabina). Non deve leggere X_validation ne' X_holdout.
     def fit(self, X, y=None):
         source = self._extract(X)
         # Le frequenze dei gruppi sono apprese mediante una strategia dedicata.
@@ -196,6 +207,9 @@ class PreprocessorePasseggeri(BaseEstimator, TransformerMixin):
         frame = FeatureEngineeringPipeline([AgeGroupTransformer()]).transform(frame)
         return frame
 
+    # TRANSFORM: prepara nuove righe con i valori salvati dal fit.
+    # Non ricalcola mediane, mode o frequenze sulle righe ricevute.
+    # Le stesse regole valgono in training, validazione, holdout e test.
     def transform(self, X):
         check_is_fitted(self, ["group_counts_", "spending_medians_", "cabin_median_"])
         frame = self._extract(X)
