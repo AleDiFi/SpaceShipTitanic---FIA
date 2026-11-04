@@ -107,6 +107,10 @@ def main() -> None:
     best_params: dict[str, object] | None = None
     best_score = float("-inf")
 
+    # GUIDA PIPELINE 1/5 - Qui inizia il tuning di ogni classificatore.
+    # Segui fine_tune_model() in src/model.py: crea la Pipeline e avvia
+    # RandomizedSearchCV.fit(). I fit/transform dei singoli fold sono
+    # gestiti automaticamente da scikit-learn, non da questo ciclo.
     for model_name in available_models:
         print(f"\n[INFO] Tuning modello: {model_name}")
         _, model_best_params, tuning_df = fine_tune_model(
@@ -149,6 +153,10 @@ def main() -> None:
 
     # L'holdout non viene utilizzato per ricerca o selezione del modello.
     print("[FASE 4] Valutazione indipendente del modello selezionato.")
+    # GUIDA PIPELINE 4/5 - Dopo la selezione via CV, fit_best_model()
+    # ricostruisce e addestra l'intera Pipeline SOLO sull'80% X_dev.
+    # La predict seguente sull'holdout richiama i transform gia' appresi
+    # (senza fit) e infine il predict del classificatore.
     holdout_model = fit_best_model(
         X_dev, y_dev, best_model_name=best_model_name, cfg=cfg, best_params=best_params,
     )
@@ -170,6 +178,9 @@ def main() -> None:
     print("[VAL-01] Risultati della valutazione sull'holdout:\n", holdout_results.to_string(index=False))
 
     print("[FASE 5] Addestramento finale e creazione della submission.")
+    # GUIDA PIPELINE 5/5 - Per Kaggle rifacciamo il fit su TUTTI i dati
+    # etichettati: anche mediane, encoder e scaler vengono riappresi.
+    # Il test privo di target passa soltanto da transform + predict.
     final_model = fit_best_model(
         X, y, best_model_name=best_model_name, cfg=cfg, best_params=best_params,
     )
