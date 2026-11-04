@@ -181,7 +181,7 @@ def _model_requires_dense_matrix(model_name: str) -> bool:
     return model_name in {"gaussian_nb"}
 
 
-# GUIDA PIPELINE 2/5 - Punto da mostrare al professore per l'ordine reale
+# GUIDA PIPELINE 2/5 - Ordine di esecuzione degli step
 # degli step. Pipeline.fit(X, y) esegue in automatico:
 #   preparazione.fit(X, y) + preparazione.transform(X)
 #   codifica.fit_transform(X_preparato)
