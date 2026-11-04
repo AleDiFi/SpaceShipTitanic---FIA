@@ -43,6 +43,7 @@ class ModelConfig:
     tune_cv_folds: int = 5
     tune_refit_metric: str = "accuracy"
     # Modelli da confrontare (sklearn-only; xgboost opzionale se disponibile)
+
     model_names: tuple[str, ...] = field(
         default_factory=lambda: (
             "logistic_regression",
@@ -58,6 +59,7 @@ class ModelConfig:
 # =============================================================================
 # SEZIONE: Funzioni di supporto (target e tipi di feature)
 # =============================================================================
+
 def _ensure_numeric_target(y: pd.Series) -> pd.Series:
     """Converte il target a 0/1 in modo robusto."""
     if y.dtype == bool:
@@ -80,6 +82,7 @@ def _split_feature_types(df: pd.DataFrame) -> tuple[list[str], list[str]]:
 # =============================================================================
 # SEZIONE: Preparazione delle caratteristiche
 # =============================================================================
+
 def build_preprocessor(
     categorical_cols: Iterable[str],
     numeric_cols: Iterable[str],
@@ -118,6 +121,10 @@ def build_preprocessor(
 # =============================================================================
 # SEZIONE: Modelli candidati e regole
 # =============================================================================
+# Modelli candidati: lineare, a distanza, probabilistico, a margine
+# ed ensemble di alberi. Random Forest aggrega alberi (bagging);
+# XGBoost aggiunge alberi in sequenza (gradient boosting).
+
 def build_model_zoo(cfg: ModelConfig) -> dict[str, object]:
     """Crea il dizionario dei modelli candidati e dei relativi classificatori."""
     zoo: dict[str, object] = {
@@ -143,6 +150,7 @@ def build_model_zoo(cfg: ModelConfig) -> dict[str, object]:
     }
 
     # XGBoost: opzionale, ma è già in requirements.txt.
+
     try:
         from xgboost import XGBClassifier  # type: ignore
 
@@ -163,6 +171,7 @@ def build_model_zoo(cfg: ModelConfig) -> dict[str, object]:
         print("[Model] XGBoost non disponibile: salto 'xgboost'.")
 
     # Filtra zoo in base ai nomi richiesti
+
     requested = set(cfg.model_names)
     filtered = {name: est for name, est in zoo.items() if name in requested}
     missing = requested.difference(filtered.keys())
@@ -170,6 +179,10 @@ def build_model_zoo(cfg: ModelConfig) -> dict[str, object]:
         print(f"[Model] Modelli richiesti ma non disponibili: {sorted(missing)}")
     return filtered
 
+
+# Lo StandardScaler e' applicato a LR, KNN e SVC: distanze, margini
+# e regolarizzazione possono risentire della scala delle feature.
+# Gli alberi non richiedono la stessa standardizzazione.
 
 def _model_requires_scaling(model_name: str) -> bool:
     """Determina quali modelli richiedono la standardizzazione."""
@@ -189,6 +202,7 @@ def _model_requires_dense_matrix(model_name: str) -> bool:
 # Pipeline.predict(X_nuovo) esegue invece:
 #   preparazione.transform -> codifica.transform -> classifier.predict.
 # Non c'e' un secondo training durante la validazione o l'holdout.
+
 def _build_pipeline_for_model(
     X: pd.DataFrame,
     model_name: str,
@@ -198,9 +212,16 @@ def _build_pipeline_for_model(
 ) -> Pipeline:
     """Crea la pipeline che comprende preparazione, codifica e classificatore."""
     # Le colonne vengono selezionate DOPO il Feature Engineering, separatamente per fold.
+
     scale_numeric = _model_requires_scaling(model_name)
     dense_matrix = _model_requires_dense_matrix(model_name)
+    # OneHotEncoder trasforma le categorie in colonne binarie;
+    # handle_unknown='ignore' gestisce categorie non viste nel training.
+
     cat = OneHotEncoder(handle_unknown="ignore", sparse_output=not dense_matrix)
+    # Le colonne numeriche sono standardizzate solo nei modelli previsti
+    # da _model_requires_scaling(); negli altri restano inalterate.
+
     num = StandardScaler() if scale_numeric else "passthrough"
     encoded = ColumnTransformer(
         [
@@ -249,6 +270,9 @@ def _validate_scoring_metric(metric_name: str) -> None:
 # =============================================================================
 # SEZIONE: Spazi di ricerca degli iperparametri
 # =============================================================================
+# I nomi 'classifier__...' indicano i parametri dello step classifier.
+# RandomizedSearchCV campiona configurazioni senza provare tutta la griglia.
+
 def build_param_distributions(model_name: str) -> dict[str, list[object]]:
     """Restituisce i possibili iperparametri esplorati per ciascun modello."""
     spaces: dict[str, dict[str, list[object]]] = {
@@ -295,6 +319,7 @@ def build_param_distributions(model_name: str) -> dict[str, list[object]]:
 # =============================================================================
 # SEZIONE: Valutazione dei modelli
 # =============================================================================
+
 def evaluate_models(
     X: pd.DataFrame,
     y: pd.Series,
@@ -368,6 +393,7 @@ def evaluate_models(
 # =============================================================================
 # SEZIONE: Valutazione dei modelli con cross-validation
 # =============================================================================
+
 def evaluate_models_cv(
     X: pd.DataFrame,
     y: pd.Series,
@@ -445,6 +471,7 @@ def evaluate_models_cv(
 # =============================================================================
 # SEZIONE: Ricerca degli iperparametri
 # =============================================================================
+
 def fine_tune_model(
     X: pd.DataFrame,
     y: pd.Series,
@@ -468,6 +495,9 @@ def fine_tune_model(
     if not param_distributions:
         raise ValueError(f"[Model][Tune] Nessuno spazio di ricerca definito per '{model_name}'.")
 
+    # Ogni candidato contiene l'intera Pipeline: anche la codifica
+    # e le statistiche del preprocessore sono adattate nei singoli fold.
+
     pipeline = _build_pipeline_for_model(X, model_name, zoo[model_name])
     cv = StratifiedKFold(
         n_splits=cfg.tune_cv_folds,
@@ -475,6 +505,9 @@ def fine_tune_model(
         random_state=cfg.random_state,
     )
     scoring = _build_scoring_dict()
+
+    # Ogni configurazione e' valutata in CV con cinque fold.
+    # Il refit finale riaddestra la configurazione migliore su X_dev.
 
     search = RandomizedSearchCV(
         estimator=pipeline,
@@ -495,7 +528,11 @@ def fine_tune_model(
     # sul quinto chiama Pipeline.predict e calcola le metriche.
     # Terminati i fold, refit='accuracy' riaddestra automaticamente
     # la configurazione migliore su TUTTO X (qui: il development set).
+
     search.fit(X, y_num)
+
+    # best_estimator_ e' la Pipeline migliore gia' riaddestrata;
+    # best_score_ e' una media CV, non il punteggio dell'holdout.
 
     best_pipeline: Pipeline = search.best_estimator_
     best_params: dict[str, object] = dict(search.best_params_)
@@ -519,6 +556,7 @@ def fine_tune_model(
 # =============================================================================
 # SEZIONE: Salvataggio dei risultati
 # =============================================================================
+
 def save_model_results(results_df: pd.DataFrame, output_path: Path) -> Path:
     """Salva la classifica dei modelli in CSV."""
     output_path = Path(output_path)
@@ -531,6 +569,7 @@ def save_model_results(results_df: pd.DataFrame, output_path: Path) -> Path:
 # =============================================================================
 # SEZIONE: Addestramento finale
 # =============================================================================
+
 def fit_best_model(
     X: pd.DataFrame,
     y: pd.Series,
@@ -559,6 +598,7 @@ def fit_best_model(
     # GUIDA PIPELINE - fit finale esplicito: scatena in automatico
     # il fit/transform di preprocessing, la codifica e il fit del modello.
     # E' richiamato sia per X_dev (holdout) sia per X completo (Kaggle).
+
     pipeline.fit(X, y_num)
     print(f"[Model] Fit completato: {best_model_name}")
     return pipeline

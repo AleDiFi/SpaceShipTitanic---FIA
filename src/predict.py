@@ -20,6 +20,7 @@ from sklearn.pipeline import Pipeline
 # =============================================================================
 # SEZIONE: Funzioni di supporto
 # =============================================================================
+
 def _to_bool_predictions(pred: Iterable[int | bool]) -> pd.Series:
     """Converte predizioni 0/1 o bool nel formato bool richiesto da Kaggle."""
     s = pd.Series(pred)
@@ -31,6 +32,9 @@ def _to_bool_predictions(pred: Iterable[int | bool]) -> pd.Series:
 # =============================================================================
 # SEZIONE: Predizioni
 # =============================================================================
+# La Pipeline e' gia' addestrata: predict applica soltanto
+# transform e classificazione, senza apprendere statistiche dal test.
+
 def predict_test(model: Pipeline, test_processed: pd.DataFrame) -> pd.Series:
     """Esegue la predizione sul test set processato."""
     print("\n" + "=" * 60)
@@ -48,6 +52,9 @@ def predict_test(model: Pipeline, test_processed: pd.DataFrame) -> pd.Series:
 # =============================================================================
 # SEZIONE: Submission Kaggle
 # =============================================================================
+# Kaggle richiede PassengerId originale e Transported booleano;
+# le predizioni mantengono l'ordine delle righe del test.
+
 def build_submission(
     passenger_ids: pd.Series,
     transported_preds: pd.Series,
@@ -69,6 +76,7 @@ def build_submission(
 # =============================================================================
 # SEZIONE: Salvataggio dei risultati
 # =============================================================================
+
 def save_submission(submission: pd.DataFrame, output_path: Path) -> Path:
     """Salva la submission su disco."""
     output_path = Path(output_path)
