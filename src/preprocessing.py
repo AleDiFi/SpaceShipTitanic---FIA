@@ -41,6 +41,7 @@ def _age_groups(age: pd.Series) -> pd.Series:
 # trasformazione di feature; le strategie deterministiche implementano
 # transform(), mentre RelazioniTransformer implementa anche fit() per
 # apprendere conteggi solo dai dati del training del fold.
+
 class FeatureTransformer(ABC):
     """Interfaccia astratta per una strategia di trasformazione delle caratteristiche."""
 
@@ -48,6 +49,9 @@ class FeatureTransformer(ABC):
     def transform(self, frame: pd.DataFrame) -> pd.DataFrame:
         """Restituisce i dati trasformati senza apprendere statistiche di validazione."""
 
+
+# PassengerId contiene l'identificatore del gruppo prima di '_NN'.
+# Group_size viene stimato piu' avanti con conteggi appresi nel fit.
 
 class GroupTransformer(FeatureTransformer):
     def transform(self, frame):
@@ -60,6 +64,9 @@ class SurnameTransformer(FeatureTransformer):
         frame["Surname"] = frame["Name"].astype("string").str.split().str[-1].astype(object)
         return frame
 
+
+# Cabin viene scomposta in ponte, numero, lato e sette indicatori
+# di regione, derivati dagli intervalli numerici della cabina.
 
 class CabinTransformer(FeatureTransformer):
     def transform(self, frame):
@@ -78,6 +85,9 @@ class CabinTransformer(FeatureTransformer):
             frame[f"Cabin_region{n}"] = region.fillna(False).astype(int)
         return frame
 
+
+# fit() apprende frequenze di gruppi e cognomi; transform() produce
+# Group_size, Solo e Family_size. Cognomi uguali non provano parentela.
 
 class RelazioniTransformer(FeatureTransformer):
     """Strategia con apprendimento dei conteggi di gruppi e cognomi.
@@ -113,6 +123,9 @@ class AgeGroupTransformer(FeatureTransformer):
         return frame
 
 
+# Expenditure somma le cinque spese dopo l'imputazione.
+# No_spending vale 1 solo se tutte e cinque sono pari a zero.
+
 class SpendingTransformer(FeatureTransformer):
     """Crea le variabili di spesa dopo aver completato le imputazioni."""
     def transform(self, frame):
@@ -137,16 +150,22 @@ class FeatureEngineeringPipeline:
 # scikit-learn richiama fit() e transform() quando si usa Pipeline.fit;
 # durante Pipeline.predict sul fold di validazione/holdout/test chiama
 # solo transform(), riutilizzando le statistiche gia' apprese.
+
 class PreprocessorePasseggeri(BaseEstimator, TransformerMixin):
     """Apprende sul training e trasforma passeggeri nuovi con statistiche fisse."""
 
     def __init__(self, aggiungi_indicatori_mancanti=False):
         # Opzione sperimentale: non modifica il modello esistente finché è False.
+
         self.aggiungi_indicatori_mancanti = aggiungi_indicatori_mancanti
+
+    # Estrae le feature strutturali e rimuove le colonne originali
+    # PassengerId, Name e Cabin prima della codifica.
 
     def _extract(self, X):
         frame = X.copy().reset_index(drop=True)
         # Le strategie strutturali non stimano statistiche dal campione.
+
         frame = FeatureEngineeringPipeline([
             GroupTransformer(), SurnameTransformer(), CabinTransformer(),
         ]).transform(frame)
@@ -155,9 +174,11 @@ class PreprocessorePasseggeri(BaseEstimator, TransformerMixin):
     # FIT: apprende da X esclusivamente le statistiche del training fold
     # (frequenze gruppi/cognomi, mode categoriche, mediane eta', spese,
     # cabina). Non deve leggere X_validation ne' X_holdout.
+
     def fit(self, X, y=None):
         source = self._extract(X)
         # Le frequenze dei gruppi sono apprese mediante una strategia dedicata.
+
         self.relazioni_ = RelazioniTransformer().fit(source)
         self.group_counts_ = self.relazioni_.group_counts_
         self.group_surname_ = self.relazioni_.group_surname_
@@ -166,6 +187,9 @@ class PreprocessorePasseggeri(BaseEstimator, TransformerMixin):
         self.group_planet_ = known_planets.groupby("Group")["HomePlanet"].agg(
             lambda s: _mode(s, "Earth")
         ).to_dict()
+        # Moda: categoria piu' frequente nel training, usata come fallback
+        # quando le informazioni di gruppo/cabina non sono sufficienti.
+
         self.category_modes_ = {
             col: _mode(source[col], default)
             for col, default in (
@@ -176,6 +200,9 @@ class PreprocessorePasseggeri(BaseEstimator, TransformerMixin):
         }
         self.age_median_ = float(source["Age"].median()) if source["Age"].notna().any() else 28.0
         source = self._fill_basic(source)
+        # Per le spese apprende mediane globali e mediane condizionate
+        # a Age_group, HomePlanet e VIP, solo sul training corrente.
+
         self.spending_medians_ = {}
         self.spending_by_group_ = {}
         for col in EXPENSE_COLUMNS:
@@ -192,6 +219,9 @@ class PreprocessorePasseggeri(BaseEstimator, TransformerMixin):
         frame = frame.copy()
         frame = self.relazioni_.transform(frame)
 
+        # HomePlanet: usa prima il gruppo, poi regole legate al ponte
+        # e infine la moda calcolata nel fit.
+
         planet = frame["HomePlanet"].fillna(frame["Group"].map(self.group_planet_))
         planet = planet.mask(planet.isna() & frame["Cabin_deck"].isin(["A", "B", "C", "T"]), "Europa")
         planet = planet.mask(planet.isna() & frame["Cabin_deck"].eq("G"), "Earth")
@@ -199,6 +229,7 @@ class PreprocessorePasseggeri(BaseEstimator, TransformerMixin):
 
         for col in ("Destination", "CryoSleep", "VIP", "Cabin_deck", "Cabin_side"):
             # Imputazione esplicita: evita conversioni implicite dei booleani in Pandas.
+
             fallback = self.category_modes_[col]
             frame[col] = frame[col].map(
                 lambda value: value if pd.notna(value) else fallback
@@ -210,17 +241,24 @@ class PreprocessorePasseggeri(BaseEstimator, TransformerMixin):
     # TRANSFORM: prepara nuove righe con i valori salvati dal fit.
     # Non ricalcola mediane, mode o frequenze sulle righe ricevute.
     # Le stesse regole valgono in training, validazione, holdout e test.
+
     def transform(self, X):
         check_is_fitted(self, ["group_counts_", "spending_medians_", "cabin_median_"])
         frame = self._extract(X)
         if self.aggiungi_indicatori_mancanti:
             # Indicatori calcolati prima di qualsiasi imputazione.
+
             frame["Spending_missing"] = frame[list(EXPENSE_COLUMNS)].isna().any(axis=1).astype(int)
             frame["Cabin_missing"] = frame["Cabin_number"].isna().astype(int)
         frame = self._fill_basic(frame)
+        # Spese mancanti: zero in CryoSleep; negli altri casi mediana
+        # del gruppo simile, con fallback alla mediana globale.
+        # L'ipotesi su CryoSleep non equivale a una certezza osservata.
+
         for col in EXPENSE_COLUMNS:
             # Ipotesi di dominio: durante il criosonno non si sostengono spese
             # per i servizi di bordo. Non è una statistica stimata dal validation set.
+
             frame.loc[frame["CryoSleep"].eq(True) & frame[col].isna(), col] = 0
             grouped = self.spending_by_group_[col]
             keys = list(zip(frame["Age_group"], frame["HomePlanet"], frame["VIP"]))
