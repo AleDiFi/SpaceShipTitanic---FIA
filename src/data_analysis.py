@@ -14,12 +14,14 @@ import seaborn as sns
 # =============================================================================
 # SEZIONE: Impostazioni dei grafici
 # =============================================================================
+
 sns.set_theme(style="whitegrid")
 
 
 # =============================================================================
 # SEZIONE: Funzioni di riepilogo
 # =============================================================================
+
 def print_dataset_shapes(train: pd.DataFrame, test: pd.DataFrame) -> None:
     """Stampa le dimensioni del training e del test."""
     print("Dimensioni del training set:", train.shape)
@@ -63,6 +65,7 @@ def report_dtypes(df: pd.DataFrame) -> None:
 # =============================================================================
 # SEZIONE: Grafici
 # =============================================================================
+
 def plot_target_distribution(train: pd.DataFrame, target_col: str = "Transported") -> None:
     """Mostra la distribuzione del target con un grafico a torta."""
     if target_col not in train.columns:
@@ -210,6 +213,10 @@ def preview_qualitative_features(
 # =============================================================================
 # SEZIONE: Analisi esplorativa completa
 # =============================================================================
+# EDA: controlli su tipi, null, duplicati, cardinalita' e distribuzioni.
+# Da main.py il target arriva solo dal development set dopo lo split;
+# le associazioni osservate non implicano relazioni causali.
+
 def run_full_analysis(train: pd.DataFrame, test: pd.DataFrame) -> None:
     """Esegue in sequenza tutte le fasi dell'EDA e organizza le visualizzazioni.
 
@@ -230,6 +237,9 @@ def run_full_analysis(train: pd.DataFrame, test: pd.DataFrame) -> None:
     report_cardinality(train)
     report_dtypes(train)
 
+    # La distribuzione di Transported permette di verificare se le
+    # classi sono bilanciate e se l'Accuracy e' informativa.
+
     plot_target_distribution(train)
     plot_age_distribution(train)
     plot_expense_distributions(train)
@@ -237,4 +247,5 @@ def run_full_analysis(train: pd.DataFrame, test: pd.DataFrame) -> None:
     preview_qualitative_features(train)
 
     # Attende che l'utente chiuda tutte le finestre prima di terminare
+
     plt.show()
